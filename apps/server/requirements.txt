@@ -1,0 +1,14 @@
+# 天健湖 · 后端依赖（框架层）
+fastapi==0.159.1
+uvicorn[standard]==0.54.0
+sqlmodel==0.0.48
+pydantic-settings>=2.6.0
+openai==3.36.1
+httpx==0.28.1
+cryptography>=43.0.0
+sse-starlette==3.5.0
+python-multipart>=0.0.9
+
+# —— 后续能力接入时再逐步加入（教材解析 / 检索 / 爬虫）——
+# python-docx, python-pptx, pypdf, pdfplumber, ebooklib, beautifulsoup4, lxml,
+# trafilatura, selectolax, numpy, jieba, sqlite-vec

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+*.local
+.pnpm-store/
+
+# 运行期数据（含 API Key 密文与本机密钥，绝不入库）
+apps/server/data/
+data/
+
+# 本地临时与截图工具的浏览器配置
+.tmp/
+
+# 系统
+.DS_Store
+*.log
