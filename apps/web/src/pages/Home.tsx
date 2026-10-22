@@ -17,6 +17,15 @@ const ROADMAP = [
   { icon: "layout-dashboard", name: "学习台", desc: "今日待办、掌握度热力图与学习报告" },
 ];
 
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 6) return "夜深了";
+  if (hour < 11) return "早上好";
+  if (hour < 14) return "中午好";
+  if (hour < 18) return "下午好";
+  return "晚上好";
+}
+
 const STEPS = [
   { title: "配置模型", desc: "填一个 OpenAI 兼容的 Base URL、模型名和 API Key，本机加密保存。", to: "/settings?tab=models", icon: "cpu" },
   { title: "试一个能力", desc: "从「速记」开始，体验能力如何自动出现在导航、设置与工具列表里。", to: "/cap/notes", icon: "notebook-pen" },
@@ -40,6 +49,7 @@ function HeroChip({ icon, label, desc }: { icon: string; label: string; desc: st
 export function Home() {
   const navigate = useNavigate();
   const info = useApp((s) => s.info);
+  const user = useApp((s) => s.user);
   const capabilities = useApp((s) => s.capabilities);
   const providers = useApp((s) => s.providers);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -99,7 +109,10 @@ export function Home() {
             <Dot />
             本地优先 · API Key 自配
           </span>
-          <h1 className="mt-5 font-display text-[34px] font-semibold leading-[1.18] tracking-tight text-ink md:text-[44px]">
+          <p className="mt-5 text-[12.5px] font-medium tracking-wide text-brand/90">
+            {greeting()}，{user?.display_name ?? "同学"}
+          </p>
+          <h1 className="mt-1.5 font-display text-[34px] font-semibold leading-[1.18] tracking-tight text-ink md:text-[44px]">
             把知识，收进一片湖里。
           </h1>
           <p className="mt-4 max-w-xl text-[14.5px] leading-relaxed text-ink-soft">

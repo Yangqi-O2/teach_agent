@@ -34,8 +34,9 @@ class JobCancelled(Exception):
 
 
 class JobContext:
-    def __init__(self, job_id: str):
+    def __init__(self, job_id: str, user_id: int = 0):
         self.job_id = job_id
+        self.user_id = user_id
         self._cancelled = threading.Event()
 
     def progress(self, pct: int, message: str | None = None) -> None:
@@ -65,7 +66,7 @@ class JobManager:
     def register(self, job_type: str, handler: JobFn) -> None:
         self._handlers[job_type] = handler
 
-    def submit(self, job_type: str, title: str, payload: dict | None = None) -> str:
+    def submit(self, job_type: str, title: str, payload: dict | None = None, user_id: int = 0) -> str:
         handler = self._handlers.get(job_type)
         if handler is None:
             raise ValueError(f"未注册的任务类型: {job_type}")
@@ -74,18 +75,19 @@ class JobManager:
             session.add(
                 Job(
                     id=job_id,
+                    user_id=user_id,
                     type=job_type,
                     title=title,
                     payload=json.dumps(payload or {}, ensure_ascii=False),
                 )
             )
-            session.add(Event(kind="job", message=f"排队：{title}", payload=job_id))
+            session.add(Event(user_id=user_id, kind="job", message=f"排队：{title}", payload=job_id))
             session.commit()
-        self._pool.submit(self._run, job_id, handler, payload or {})
+        self._pool.submit(self._run, job_id, handler, payload or {}, user_id)
         return job_id
 
-    def _run(self, job_id: str, handler: JobFn, payload: dict) -> None:
-        ctx = JobContext(job_id)
+    def _run(self, job_id: str, handler: JobFn, payload: dict, user_id: int = 0) -> None:
+        ctx = JobContext(job_id, user_id)
         self._contexts[job_id] = ctx
         self._update(job_id, status="running", progress=1, message="开始执行")
         try:

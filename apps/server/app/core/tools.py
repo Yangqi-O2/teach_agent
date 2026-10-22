@@ -16,6 +16,14 @@ ToolHandler = Callable[..., Awaitable[Any]]
 
 
 @dataclass
+class ToolContext:
+    """工具执行上下文：至少带上发起人的 user_id，方便做数据隔离。"""
+
+    user_id: int = 0
+    capability: str = ""
+
+
+@dataclass
 class Tool:
     name: str
     description: str
@@ -25,10 +33,10 @@ class Tool:
     needs_confirm: bool = False
     handler: ToolHandler | None = None
 
-    async def run(self, **kwargs: Any) -> Any:
+    async def run(self, ctx: ToolContext | None = None, **kwargs: Any) -> Any:
         if self.handler is None:
             raise RuntimeError(f"工具 {self.name} 没有绑定执行函数")
-        result = self.handler(**kwargs)
+        result = self.handler(ctx or ToolContext(user_id=0), **kwargs)
         if inspect.isawaitable(result):
             result = await result
         return result
@@ -78,12 +86,14 @@ class ToolRegistry:
             tools = [t for t in tools if t.capability in allowed or not t.capability]
         return [t.as_openai_spec() for t in tools]
 
-    async def execute(self, name: str, arguments: dict | None = None) -> dict:
+    async def execute(
+        self, name: str, arguments: dict | None = None, ctx: ToolContext | None = None
+    ) -> dict:
         tool = self._tools.get(name)
         if tool is None:
             return {"ok": False, "error": f"未知工具: {name}"}
         try:
-            data = await tool.run(**(arguments or {}))
+            data = await tool.run(ctx, **(arguments or {}))
             return {"ok": True, "data": data}
         except Exception as exc:  # noqa: BLE001
             log.exception("工具执行失败: %s", name)

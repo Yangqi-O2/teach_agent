@@ -18,5 +18,15 @@ doctor:           ## 环境自检
 test:             ## 后端测试
 	cd apps/server && .venv/bin/python -m pytest -q
 
-clean:            ## 清理构建产物与本地数据（谨慎）
-	rm -rf apps/web/dist apps/server/data
+backup:           ## 备份 data/（含数据库、密钥、上传文件）
+	@mkdir -p backups
+	tar czf backups/tianjianhu-$$(date +%Y%m%d-%H%M%S).tar.gz data
+	@echo "已备份到 backups/"
+
+reset-data:       ## 清空所有账号与数据（不可恢复，需 FORCE=1）
+	@if [ "$$FORCE" != "1" ]; then echo "这会删除 data/ 下全部数据。确认请执行：make reset-data FORCE=1"; exit 1; fi
+	rm -rf data
+	@echo "已清空 data/，下次启动自动重建"
+
+clean:            ## 清理构建产物
+	rm -rf apps/web/dist apps/server/.venv .pnpm-store

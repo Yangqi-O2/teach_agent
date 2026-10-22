@@ -5,6 +5,7 @@ import { AppRoutes } from "./app/router";
 import { Shell } from "./app/Shell";
 import { BrandMark } from "./components/Brand";
 import { Button } from "./components/ui/primitives";
+import { LoginPage } from "./pages/Login";
 import { applyTheme, useApp } from "./store/app";
 
 function BootScreen() {
@@ -58,14 +59,21 @@ function BootError({ message, onRetry }: { message: string; onRetry: () => void 
 export default function App() {
   const booted = useApp((s) => s.booted);
   const bootError = useApp((s) => s.bootError);
+  const user = useApp((s) => s.user);
   const theme = useApp((s) => s.theme);
-  const bootstrap = useApp((s) => s.bootstrap);
+  const initialize = useApp((s) => s.initialize);
   const paletteOpen = useApp((s) => s.paletteOpen);
   const setPaletteOpen = useApp((s) => s.setPaletteOpen);
 
   useEffect(() => {
-    bootstrap();
-  }, [bootstrap]);
+    initialize();
+  }, [initialize]);
+
+  useEffect(() => {
+    const onUnauthorized = () => useApp.getState().resetAuth();
+    window.addEventListener("tjh:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("tjh:unauthorized", onUnauthorized);
+  }, []);
 
   useEffect(() => {
     applyTheme(theme);
@@ -91,7 +99,8 @@ export default function App() {
   }, [paletteOpen, setPaletteOpen]);
 
   if (!booted) return <BootScreen />;
-  if (bootError) return <BootError message={bootError} onRetry={() => bootstrap()} />;
+  if (bootError) return <BootError message={bootError} onRetry={() => initialize()} />;
+  if (!user) return <LoginPage />;
 
   return (
     <BrowserRouter>

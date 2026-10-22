@@ -1,6 +1,14 @@
 import { create } from "zustand";
 
-import { api, type AppInfo, type CapabilityInfo, type Provider } from "../lib/api";
+import {
+  ApiError,
+  api,
+  type AppInfo,
+  type AuthConfig,
+  type CapabilityInfo,
+  type Provider,
+  type User,
+} from "../lib/api";
 
 export type Theme = "light" | "dark" | "system";
 export type ToastTone = "default" | "success" | "error";
@@ -26,13 +34,22 @@ export function applyTheme(theme: Theme) {
 type AppState = {
   booted: boolean;
   bootError: string | null;
+  authConfig: AuthConfig | null;
+  user: User | null;
   info: AppInfo | null;
   capabilities: CapabilityInfo[];
   providers: Provider[];
   theme: Theme;
   paletteOpen: boolean;
   toasts: Toast[];
-  bootstrap: () => Promise<void>;
+
+  initialize: () => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string, displayName: string) => Promise<void>;
+  logout: () => Promise<void>;
+  loadWorkspace: () => Promise<void>;
+  resetAuth: () => void;
+
   refreshProviders: () => Promise<void>;
   refreshCapabilities: () => Promise<void>;
   setTheme: (theme: Theme) => void;
@@ -43,9 +60,17 @@ type AppState = {
 
 let toastSeq = 0;
 
+const EMPTY_WORKSPACE = {
+  info: null as AppInfo | null,
+  capabilities: [] as CapabilityInfo[],
+  providers: [] as Provider[],
+};
+
 export const useApp = create<AppState>((set, get) => ({
   booted: false,
   bootError: null,
+  authConfig: null,
+  user: null,
   info: null,
   capabilities: [],
   providers: [],
@@ -53,17 +78,63 @@ export const useApp = create<AppState>((set, get) => ({
   paletteOpen: false,
   toasts: [],
 
-  bootstrap: async () => {
+  initialize: async () => {
     try {
-      const [info, capabilities, providers] = await Promise.all([
-        api.info(),
-        api.capabilities.list(),
-        api.providers.list(),
-      ]);
-      set({ info, capabilities, providers, booted: true, bootError: null });
+      const authConfig = await api.auth.config();
+      set({ authConfig });
+      try {
+        const user = await api.auth.me();
+        set({ user });
+        await get().loadWorkspace();
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 401)) throw error;
+        set({ user: null });
+      }
+      set({ booted: true, bootError: null });
     } catch (error) {
-      set({ booted: true, bootError: error instanceof Error ? error.message : String(error) });
+      set({
+        booted: true,
+        bootError: error instanceof Error ? error.message : String(error),
+      });
     }
+  },
+
+  login: async (username, password) => {
+    const user = await api.auth.login(username, password);
+    set({ user });
+    await get().loadWorkspace();
+  },
+
+  register: async (username, password, displayName) => {
+    const user = await api.auth.register(username, password, displayName);
+    set({ user });
+    await get().loadWorkspace();
+  },
+
+  logout: async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+      /* 忽略：本地状态照常清空 */
+    }
+    get().resetAuth();
+  },
+
+  resetAuth: () => {
+    set({
+      user: null,
+      ...EMPTY_WORKSPACE,
+      paletteOpen: false,
+    });
+  },
+
+  loadWorkspace: async () => {
+    const [info, capabilities, providers] = await Promise.all([
+      api.info(),
+      api.capabilities.list(),
+      api.providers.list(),
+    ]);
+    set({ info, capabilities, providers });
   },
 
   refreshProviders: async () => {

@@ -16,21 +16,23 @@ from pathlib import Path
 from sqlmodel import Session
 
 from ...core.capability import Capability, CapabilityManifest, NavItem
-from ...core.tools import Tool
+from ...core.tools import Tool, ToolContext
 from ...db import engine
 from ...models import CapabilityState
 from .router import router
 
 
-async def _create_note(title: str = "", content: str = "", tags: str = "") -> dict:
+async def _create_note(ctx: ToolContext, title: str = "", content: str = "", tags: str = "") -> dict:
     from .models import Note
 
     title = (title or "").strip()
     content = (content or "").strip()
     if not title and not content:
         raise ValueError("title 与 content 至少给一个")
+    if not ctx.user_id:
+        raise ValueError("缺少用户上下文")
     with Session(engine) as session:
-        state = session.get(CapabilityState, "notes")
+        state = session.get(CapabilityState, (ctx.user_id, "notes"))
         default_tags = "课堂"
         if state:
             try:
@@ -38,6 +40,7 @@ async def _create_note(title: str = "", content: str = "", tags: str = "") -> di
             except json.JSONDecodeError:
                 pass
         note = Note(
+            user_id=ctx.user_id,
             title=title or content.splitlines()[0][:30],
             content=content,
             tags=(tags or default_tags).strip(),

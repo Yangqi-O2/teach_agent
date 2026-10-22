@@ -46,6 +46,11 @@ import {
   Trash2,
   Type,
   Upload,
+  UserPlus,
+  UserRound,
+  Users,
+  LogOut,
+  Shield,
   Wand2,
   X,
   type LucideIcon,
@@ -103,6 +108,11 @@ const MAP: Record<string, LucideIcon> = {
   calendar: Calendar,
   "file-text": FileText,
   presentation: Presentation,
+  users: Users,
+  "user-round": UserRound,
+  "user-plus": UserPlus,
+  "log-out": LogOut,
+  shield: Shield,
 };
 
 export function getIcon(name?: string | null): LucideIcon {

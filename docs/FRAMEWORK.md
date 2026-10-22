@@ -1,7 +1,7 @@
-# 天健湖 · 框架说明（v0.1.0）
+# 天健湖 · 框架说明（v0.2.0）
 
-> 这一版只做「总体框架」：内核、能力插件、工具注册、迁移、任务中心、模型接入、设计系统与前端骨架。
-> 教材库 / 校园雷达 / 联想记忆等能力会按同一套协议逐个接进来，**不需要改内核**。
+> v0.1 做了「总体框架」；v0.2 补上了**账号体系、按用户的数据隔离**，并把所有运行期数据收进仓库根的 `data/`。
+> 教材库 / 校园雷达 / 联想记忆等能力继续按同一套能力协议逐个接入，**不需要改内核**。
 
 ---
 
@@ -10,38 +10,46 @@
 ```
 apps/server/                     Python 后端（FastAPI）
 ├── app/
-│   ├── main.py                  应用装配：发现能力 → 迁移 → 建表 → 挂路由 → 托管前端
-│   ├── config.py                配置（TJH_ 环境变量 / .env）+ 数据目录
-│   ├── db.py                    SQLite 引擎、会话、迁移执行器
-│   ├── models.py                核心表：providers / settings / jobs / capability_state / events
+│   ├── main.py                  应用装配：发现能力 → 迁移 → 建表 → 挂路由（公开/受保护）→ 托管前端
+│   ├── config.py                配置（TJH_ 环境变量 / .env）、数据目录、会话参数
+│   ├── db.py                    SQLite 引擎、会话、迁移执行器、旧数据目录迁移
+│   ├── models.py                users / sessions / providers / settings / jobs / capability_state / events
 │   ├── core/
-│   │   ├── capability.py        能力协议 + 自动发现 + 全局注册表
-│   │   ├── tools.py             工具注册表（Agent function calling 清单）
-│   │   ├── llm.py               OpenAI 兼容客户端（chat / stream / embed / 测试连接）
-│   │   ├── jobs.py              任务中心（线程池 + 进度 + 取消）
-│   │   ├── crypto.py            Fernet 加密 API Key（本机 secret.key，0600）
+│   │   ├── auth.py              密码哈希、会话、current_user / require_admin、注册登录、限流
+│   │   ├── capability.py        能力协议 + 自动发现 + 挂载（统一加登录依赖）
+│   │   ├── tools.py             Tool / ToolContext / 工具注册表
+│   │   ├── llm.py               OpenAI 兼容客户端（按用户解析供应商）
+│   │   ├── jobs.py              任务中心（线程池 + 进度 + 取消 + user_id）
+│   │   ├── crypto.py            Fernet 加密 API Key（data/secret.key）
 │   │   └── errors.py            统一错误 JSON
-│   ├── api/                     system / providers / jobs / settings 四组接口
-│   ├── capabilities/            能力插件目录（目前只有 notes 示例）
-│   │   └── notes/               capability.py · router.py · models.py · migrations/
+│   ├── api/
+│   │   ├── auth.py              注册 / 登录 / 登出 / 改密 / 配置
+│   │   ├── users.py             管理员：成员管理、注册开关
+│   │   ├── system.py            信息、能力、工具、事件（按用户）
+│   │   ├── providers.py         供应商 CRUD / 测试 / 默认（按用户）
+│   │   ├── jobs.py              任务列表 / 取消 / SSE（按用户）
+│   │   └── settings.py          站点设置（管理员可写）
+│   ├── capabilities/            能力插件（notes 速记、wechat_digest 群聊简报）
 │   ├── migrations/              核心迁移（预留）
-│   └── cli.py                   run / doctor / migrate / new-capability
-├── data/                        运行期数据（gitignore）：app.db、secret.key、uploads/
-└── requirements.txt
+│   └── cli.py                   run / doctor / migrate / new-capability / 用户管理
+├── requirements.txt
+└── .env.example
 
 apps/web/                        React 前端（Vite + Tailwind v4）
 ├── src/
-│   ├── App.tsx                  Bootstrap：加载 /api/info、能力、供应商；主题；⌘K
-│   ├── app/                     Shell、Sidebar、Topbar、CommandPalette、router
-│   ├── components/              Brand、PageHeader、StatCard、Icon、ProviderPanel、CapabilityPanel
-│   │   └── ui/                  primitives（Button/Input/Badge/Switch/...）+ overlay（Modal/Toast）
+│   ├── App.tsx                  启动：读配置 → 校验会话 → 工作区数据；未登录进登录页
+│   ├── app/                     Shell、Sidebar、Topbar、CommandPalette、router、ThemeToggle
+│   ├── components/              Brand、PageHeader、StatCard、Icon、ProviderPanel、CapabilityPanel、UserMenu
+│   │   └── ui/                  primitives + overlay（Modal / Dropdown / Toast）
 │   ├── capabilities/            前端能力注册表（import.meta.glob）+ 各能力页面
-│   │   └── notes/               index.tsx（路由）+ page.tsx（页面）
-│   ├── lib/                     api.ts（类型化客户端）、utils.ts
-│   ├── pages/                   Home / Settings / Jobs / NotFound
-│   ├── store/app.ts             zustand：bootstrap、主题、通知
-│   └── styles.css               设计令牌（@theme）、组件类、动效
-└── dist/                        构建产物（由后端托管）
+│   ├── lib/                     api.ts（含 auth/admin）、utils.ts
+│   ├── pages/                   Login / Home / Settings / Jobs / AdminUsers / NotFound
+│   ├── store/app.ts             zustand：初始化、登录态、工作区、主题、通知
+│   └── styles.css               设计令牌与动效
+└── dist/                        构建产物（后端托管）
+
+data/                            唯一的运行期数据目录（gitignore，见 §5）
+docs/  scripts/  Makefile
 ```
 
 ---
@@ -52,104 +60,152 @@ apps/web/                        React 前端（Vite + Tailwind v4）
 uvicorn app.main:app
   └─ create_app()
        ├─ settings.ensure_dirs()              创建 data/、uploads/、cache/
+       ├─ _migrate_legacy_data_dir()          旧位置 apps/server/data → 仓库根 data/
        ├─ capabilities.discover()             扫描 app/capabilities/*/capability.py
        ├─ init_db(capabilities.migration_dirs())
-       │    ├─ 执行 core/app/migrations/*.sql
-       │    ├─ 执行 <cap>/migrations/*.sql（按文件名顺序，只执行一次）
+       │    ├─ 执行核心迁移 → 各能力 migrations/*.sql（只执行一次）
        │    └─ SQLModel.metadata.create_all() 建核心表
        ├─ capabilities.register_tools()       收集 Tool 进全局注册表
-       ├─ include_router(/api/...)            系统 / 供应商 / 任务 / 设置
-       ├─ capabilities.mount(app)             每个能力挂到 /api/c/<id>
-       └─ _mount_frontend(app)                托管 apps/web/dist，其余路径回 index.html
+       ├─ 公开路由：/api/health、/api/auth/*
+       ├─ 受保护路由：system / providers / jobs / settings / admin（统一 Depends(current_user)）
+       └─ 托管 apps/web/dist，其余路径回 index.html
 ```
 
 开发模式（`make dev`）：后端 8787 + Vite 5174，Vite 把 `/api` 代理到 8787。
 
 ---
 
-## 3. 能力协议（后端）
+## 3. 账号、会话与数据隔离
 
-一个能力就是一个继承了 `Capability` 的类，并在模块里暴露 `CAPABILITY`：
+### 3.1 表
+
+| 表 | 说明 |
+|---|---|
+| `users` | `username`（小写唯一）、`display_name`、`password_hash`（scrypt）、`role`（admin/user）、`is_active`、`last_login_at` |
+| `sessions` | 主键是 `sha256(token)`；`user_id`、`expires_at`（默认 30 天）、`last_seen_at`、`user_agent` |
+
+业务表（`providers` / `jobs` / `events` / 能力表）都带 `user_id`；`capability_state` 用 `(user_id, capability_id)` 联合主键。
+
+### 3.2 密码与会话
 
 ```python
-# app/capabilities/notes/capability.py
-from app.core.capability import Capability, CapabilityManifest, NavItem
-from app.core.tools import Tool
-
-class NotesCapability(Capability):
-    manifest = CapabilityManifest(
-        id="notes",
-        name="速记",
-        description="随手记下课堂灵感、待办与摘录",
-        icon="notebook-pen",                       # lucide 图标名
-        nav=NavItem(label="速记", path="/cap/notes", order=10),
-        settings_schema={                          # 前端自动渲染设置表单
-            "type": "object",
-            "properties": {
-                "default_tags": {"type": "string", "title": "默认标签", "default": "课堂"}
-            },
-        },
-    )
-
-    def router(self):            return router            # 挂载到 /api/c/notes
-    def migrations_dir(self):    return Path(__file__).parent / "migrations"
-    def tools(self):             return [Tool(name="create_note", ..., handler=_create_note)]
-    async def on_startup(self, app): ...                   # 可选
-
-CAPABILITY = NotesCapability()
+# core/auth.py
+hash_password("...")   # scrypt$n$r$p$salt$digest，每用户独立盐
+verify_password(pw, stored)  # 常量时间比较
+create_session(db, user, request) -> token   # 库里只存 sha256(token)
+resolve_user(db, token) -> User | None       # 校验过期、is_active，每小时刷新 last_seen
 ```
 
-约定与保证：
+- Cookie：`tjh_session`，`HttpOnly`、`SameSite=Lax`、`Path=/`，`secure` 由 `TJH_COOKIE_SECURE` 控制。
+- 登录限流：默认 5 分钟 8 次（进程内字典，单实例够用）。
+- 停用账号 / 重置密码 / 删除成员 → 删除该用户全部 session，已登录设备立即 401。
 
-| 项 | 说明 |
-|---|---|
-| 发现 | 启动时扫描 `app/capabilities/*/capability.py`；模块加载失败只告警不崩 |
-| 路由 | `router()` 返回的 APIRouter 自动挂到 `/api/c/<cap_id>` |
-| 工具 | `tools()` 返回的 Tool 自动进入 `/api/tools` 与 Agent 工具表 |
-| 迁移 | `migrations/*.sql` 按文件名执行一次，记录在 `_migrations` 表 |
-| 设置 | `settings_schema` 是 JSON Schema 子集，前端据此渲染表单并回写 `capability_state` |
-| 开关 | 禁用后：导航消失、工具不再暴露；数据保留、路由仍在（单用户本地场景下不做硬隔离） |
+### 3.3 依赖与保护
+
+```python
+from ..core.auth import current_user, require_admin
+
+@router.get("/items")
+async def list_items(user: User = Depends(current_user), db: Session = Depends(get_session)):
+    return db.exec(select(Note).where(Note.user_id == user.id)).all()
+```
+
+- **路由级保护**：`main.py` 给业务路由统一加 `dependencies=[Depends(current_user)]`；能力路由由 `capabilities.mount()` 统一加。
+- **管理员保护**：`/api/admin/*` 的 router 级依赖 `require_admin`。
+- **数据过滤**：所有查询/写入都必须带 `user_id`；「按 id 取一条」时要校验 `row.user_id == user.id`（否则 404）。
+- **工具调用**：`ToolContext.user_id` 由调用方注入，能力工具据此隔离数据。
+
+### 3.4 注册策略
+
+- 首个注册者自动成为 `admin`；之后注册者为 `user`。
+- 管理员可关闭自助注册（`PUT /api/admin/registration`）；关闭后仍可在「成员管理」里新建成员。
+- 用户名 3–24 位字母/数字/下划线；密码至少 8 位。
+- 旧版本（v0.1 单用户）数据库会被自动备份为 `data/app.db.v0.1-<时间>.bak`，再创建多用户新库。
 
 ---
 
-## 4. 工具注册表（给 Agent 用）
+## 4. 能力协议
+
+一个能力 = 继承 `Capability` 的类 + 模块级 `CAPABILITY` 实例：
 
 ```python
+class NotesCapability(Capability):
+    manifest = CapabilityManifest(
+        id="notes", name="速记", description="...", icon="notebook-pen",
+        nav=NavItem(label="速记", path="/cap/notes", order=10),
+        settings_schema={...},          # 前端自动渲染设置表单（按用户保存）
+    )
+
+    def router(self):         return router              # 挂到 /api/c/notes，自动要求登录
+    def migrations_dir(self): return Path(__file__).parent / "migrations"
+    def tools(self):          return [Tool(name="create_note", ..., handler=_create_note)]
+    async def on_startup(self, app): ...                 # 可选
+```
+
+| 项 | 约定 |
+|---|---|
+| 发现 | 启动扫描 `app/capabilities/*/capability.py`；坏插件只告警 |
+| 路由 | 自动挂 `/api/c/<id>`，并统一要求登录 |
+| 工具 | 自动进入 `/api/tools`；handler 第一个参数是 `ToolContext` |
+| 迁移 | 能力自带 `migrations/*.sql`，按文件名执行一次 |
+| 设置 | `settings_schema`（JSON Schema 子集），按用户存 `capability_state` |
+| 开关 | 禁用后导航消失、工具不暴露；数据保留 |
+
+---
+
+## 5. 数据目录 `data/`
+
+```
+data/
+├── app.db          SQLite 主库（WAL）
+├── app.db-wal      WAL 日志（运行时）
+├── app.db-shm      共享内存（运行时）
+├── secret.key      API Key 加密密钥（0600；必须与库一起备份）
+├── uploads/        教材等上传文件（后续能力使用）
+└── cache/          解析 / 模型响应缓存
+```
+
+- **GitHub 协作**：`.gitignore` 排除 `data/*`（只保留 `data/README.md`）与 `.env`；每个人本地跑自己的实例，代码共享、数据不共享。
+- **备份/恢复**：`make backup` → `backups/tianjianhu-*.tar.gz`；恢复时停服务、解压覆盖 `data/`。
+- **重置**：`make reset-data FORCE=1`。
+- **换位置**：`TJH_DATA_DIR=/srv/tianjianhu-data`。
+- **升级迁移**：旧位置 `apps/server/data/` 会在启动时整体搬到 `data/`。
+
+---
+
+## 6. 工具注册表（给 Agent 用）
+
+```python
+@dataclass
+class ToolContext:
+    user_id: int = 0
+    capability: str = ""
+
 Tool(
-    name="create_note",                 # 函数名，全局唯一
+    name="create_note",
     description="把一段内容记成速记",
     parameters={... JSON Schema ...},
-    handler=_create_note,               # async 或 sync，参数按 schema 传入
-    scopes=["notes:write"],             # 预留权限位
-    needs_confirm=False,                # 高风险操作可要求前端确认
+    handler=_create_note,        # async def handler(ctx: ToolContext, **kwargs)
+    scopes=["notes:write"],      # 预留权限位
+    needs_confirm=False,
 )
 ```
 
-- `GET /api/tools` 返回全部工具（含所属能力、参数、权限、是否启用）。
-- 后续接入 Agent 主循环时，直接 `registry.openai_specs(allowed=已启用能力)` 作为 `tools` 参数；执行统一走 `registry.execute(name, args)`，返回 `{ok, data}` / `{ok:false, error}`。
+- `GET /api/tools` 返回当前用户可见的工具（含所属能力、是否启用）。
+- 执行：`await registry.execute(name, args, ToolContext(user_id=user.id))` → `{ok, data}` / `{ok:false, error}`。
+- 后续接入 Agent 主循环时，`LLMClient.chat(tools=registry.openai_specs(...))` 即可。
 
 ---
 
-## 5. 数据与迁移
+## 7. 数据库迁移
 
-核心表（`SQLModel` 定义在 `models.py`）：
-
-| 表 | 用途 |
-|---|---|
-| `providers` | 模型供应商；`api_key_enc` 是 Fernet 密文，`key_hint` 只存掩码 |
-| `settings` | 全局键值设置（JSON 文本） |
-| `jobs` | 任务：queued/running/done/error/cancelled + progress/message/result |
-| `capability_state` | 能力开关与设置 JSON |
-| `events` | 事件日志（首页动态、操作审计） |
-| `_migrations` | 迁移执行记录 |
-
-能力自带表（如 `notes`）由能力自己的 SQL 迁移创建，核心不感知。
-
-**迁移规则**：`文件名排序 → 已执行则跳过 → 整个文件一个事务执行 → 记录到 `_migrations`**。写迁移时请用 `CREATE TABLE IF NOT EXISTS` 等幂等语句。
+- 核心表由 `SQLModel.metadata.create_all()` 创建；能力表由能力 SQL 创建。
+- 迁移按文件名排序，记录在 `_migrations`，每个文件作为一个事务执行；请写幂等 SQL（`CREATE TABLE IF NOT EXISTS`）。
+- 修改已有表结构时：新增迁移文件（不要改历史迁移），或按版本约定清理数据目录（框架早期）。
 
 ---
 
-## 6. 前端能力注册表
+## 8. 前端能力注册表
 
 ```ts
 // src/capabilities/notes/index.tsx
@@ -158,99 +214,90 @@ const capability: CapabilityModule = {
   routes: [{ path: "/cap/notes", element: <NotesPage /> }],
 };
 export default capability;
-
-// src/capabilities/registry.ts
-const modules = import.meta.glob("./*/index.tsx", { eager: true });
 ```
 
 - **导航与开关以服务端 manifest 为准**（`/api/capabilities`），前端只提供页面。
-- 路由：`AppRoutes` 只挂载「已启用」能力的前端路由。
-- 设置表单：`CapabilityPanel` 读取 `settings_schema`，支持 string / number / integer / boolean / enum，改动回写 `PUT /api/capabilities/<id>`。
+- 只挂载「已启用」能力的前端路由；设置表单由 `settings_schema` 自动渲染。
+- 登录态由 `store/app.ts` 管理：`initialize()` → `/api/auth/config` + `/api/auth/me`；401 时全局事件 `tjh:unauthorized` 会清空登录态回到登录页。
 
 ---
 
-## 7. CLI
+## 9. CLI
 
 ```bash
 cd apps/server
-.venv/bin/python -m app.cli run            # 启动后端
-.venv/bin/python -m app.cli doctor         # 环境自检（Python/依赖/端口/前端产物）
-.venv/bin/python -m app.cli migrate        # 执行迁移
+.venv/bin/python -m app.cli run              # 启动
+.venv/bin/python -m app.cli doctor           # 环境自检
+.venv/bin/python -m app.cli migrate          # 迁移
 .venv/bin/python -m app.cli new-capability flashcards --name 记忆卡 --icon brain --order 20
-```
 
-`new-capability` 会同时生成：
-
+# 账号（适合无浏览器的服务器）
+.venv/bin/python -m app.cli create-user admin --admin          # 随机密码并打印
+.venv/bin/python -m app.cli list-users
+.venv/bin/python -m app.cli set-password admin --password '...'
 ```
-app/capabilities/<id>/{capability.py, router.py, migrations/001_init.sql}
-src/capabilities/<id>/{index.tsx, page.tsx}
-```
-
-重启后端 → 侧栏出现新能力 → `/api/tools` 出现 `<id>_ping` 工具。
 
 ---
 
-## 8. HTTP API（v0.1.0 已实现）
+## 10. HTTP API（v0.2.0）
+
+**公开**：`GET /api/health`、`GET /api/auth/config`、`POST /api/auth/register`、`POST /api/auth/login`
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/health` | 健康检查 |
-| GET | `/api/info` | 版本、数据目录、供应商/能力/工具数量 |
-| GET | `/api/capabilities` | 能力清单（manifest + enabled + settings） |
+| POST | `/api/auth/logout` | 销毁会话并清 Cookie |
+| GET | `/api/auth/me` | 当前用户（未登录 401） |
+| PUT | `/api/auth/password` | 改密（会重新签发当前会话） |
+| GET | `/api/info` | 版本、当前用户、数据目录（仅管理员可见）、供应商/能力/工具数量 |
+| GET | `/api/capabilities` | 能力清单（含当前用户的开关与设置） |
 | PUT | `/api/capabilities/{id}` | `{enabled?, settings?}` |
-| GET | `/api/tools` | Agent 工具清单 |
-| GET | `/api/events?limit=` | 事件日志 |
-| GET/POST | `/api/providers` | 供应商列表 / 新建 |
-| PUT/DELETE | `/api/providers/{id}` | 更新 / 删除（key 留空=不改，空串=清除） |
+| GET | `/api/tools` | 当前用户可见的 Agent 工具 |
+| GET | `/api/events?limit=` | 当前用户的事件日志 |
+| GET/POST | `/api/providers` | 自己的供应商列表 / 新建 |
+| PUT/DELETE | `/api/providers/{id}` | 更新 / 删除（仅本人） |
 | POST | `/api/providers/{id}/default` | 设为默认 |
-| POST | `/api/providers/{id}/test` | 连通性测试（models + 1 token chat） |
-| GET | `/api/providers/{id}/models` | 拉模型列表 |
-| GET/PUT | `/api/settings` | 全局键值设置 |
-| GET | `/api/jobs`、`/api/jobs/{id}` | 任务列表 / 详情 |
-| POST | `/api/jobs/{id}/cancel` | 取消任务 |
-| GET | `/api/jobs/stream/events` | SSE：任务快照（0.9s 轮询推送） |
-| GET/POST | `/api/c/notes/items` | 速记列表（`?q=` 搜索）/ 新建 |
-| PATCH/DELETE | `/api/c/notes/items/{id}` | 修改 / 删除 |
+| POST | `/api/providers/{id}/test` | 连通性测试 |
+| GET | `/api/providers/{id}/models` | 模型列表 |
+| GET/PUT | `/api/settings` | 读取（全员）/ 写入（管理员） |
+| GET | `/api/jobs`、`/api/jobs/{id}` | 自己的任务 |
+| POST | `/api/jobs/{id}/cancel` | 取消自己的任务 |
+| GET | `/api/jobs/stream/events` | SSE：自己的任务快照 |
+| GET | `/api/admin/users` | 成员列表（管理员） |
+| POST | `/api/admin/users` | 新建成员 |
+| PATCH/DELETE | `/api/admin/users/{id}` | 改角色/昵称/启停、删除 |
+| POST | `/api/admin/users/{id}/password` | 重置密码 |
+| PUT | `/api/admin/registration` | 开放 / 关闭自助注册 |
+| GET/POST | `/api/c/notes/items` | 速记（按用户） |
+| GET/POST | `/api/c/wechat_digest/*` | 群聊简报（按用户） |
 | GET | `/api/docs` | Swagger UI |
 
-错误统一：`{code, message, detail?}`。
+错误统一 `{code, message, detail?}`；401 未登录、403 权限不足。
 
 ---
 
-## 9. 接入新能力的三条路
+## 11. 接入新能力
 
-**A. 用脚手架（推荐）**
+**A. 脚手架（推荐）**
 
 ```bash
 cd apps/server
 .venv/bin/python -m app.cli new-capability flashcards --name 记忆卡 --icon brain --order 20
 ```
 
-然后把 `router.py`、`capability.py`、`page.tsx` 填上业务逻辑即可。
+**B. 手工**：复制 `app/capabilities/notes/`，改 manifest / 路由 / 迁移 / 工具。
 
-**B. 手工加一个后端能力**：复制 `app/capabilities/notes/` 改名，修改 manifest、路由、迁移，重启。
+**C. 只加工具**：在已有能力里多返回几个 `Tool`，Agent 立刻多出几种动作。
 
-**C. 只加工具不改 UI**：在已有能力里多返回几个 `Tool`，Agent 立刻多出几种动作。
-
----
-
-## 10. 下一步建议（对应 DESIGN.md 路线图）
-
-| 阶段 | 要加的东西 | 框架已提供的 |
-|---|---|---|
-| P1 教材库 | `parsers/`（docx/pptx/pdf/epub）、分块、嵌入、FTS5+向量检索、SSE 聊天 | 任务中心、LLM 客户端（chat/stream/embed）、迁移、设置表单、SSE 经验 |
-| P2 校园雷达 | 订阅源、适配器、抓取 job、LLM 抽取、通知表、日历 | 任务中心、能力路由、工具注册 |
-| P3 联想记忆 | 画像、知识点抽取、卡片生成、FSRS 复习 | 设置表单、工具、迁移、事件 |
-| P4 练习场 | 出题/批改/错题本 | 全部同上 |
-| P5 打磨 | 动效、移动端、Docker、示例数据 | 设计系统已就绪 |
+**接入多用户时必须做**：每张表加 `user_id`；每个查询按 `user.id` 过滤；`GET /x/{id}` 校验归属；工具 handler 使用 `ctx.user_id`。
 
 ---
 
-## 11. 已知限制
+## 12. 已知限制
 
-- **单用户本地**：默认只监听 `127.0.0.1`，没有登录体系。
-- **Agent 主循环尚未接入**：工具已经注册好，但还没有聊天界面去调用它们（P1 一起做）。
-- **能力禁用是软隔离**：路由仍可访问，仅隐藏导航、移除工具。
-- **任务 SSE 是轮询快照**（0.9s），不是逐事件推送；任务量大时再改。
-- **中文界面**，无 i18n。
-- 前端没有引入 React Query，简单页面用 `useEffect` + store；复杂数据流接入后再评估。
+- **单进程**：登录限流与任务上下文都在进程内；多 worker / 多实例需要换 Redis 与外部任务队列。
+- **无邮箱验证 / 找回密码**：忘记密码由管理员重置；服务器场景可用 CLI `set-password`。
+- **会话固定 30 天**，不做滚动续期（只刷新 `last_seen`）。
+- **能力禁用是软隔离**：路由仍可达（但强制登录），仅隐藏导航、移除工具。
+- **Agent 主循环尚未接入**：工具已带 user 上下文，但还没有聊天界面调用它们。
+- **CSRF**：依赖 `SameSite=Lax` + JSON 请求；若前后端跨站部署需要额外 token。
+- 中文界面，无 i18n。

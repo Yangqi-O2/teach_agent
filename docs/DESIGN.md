@@ -10,7 +10,7 @@
 
 | 维度 | 结论 |
 |---|---|
-| 形态 | 本地优先的 Web 应用（浏览器打开），单进程启动，数据全部在本地 `apps/server/data/` |
+| 形态 | 本地优先的 Web 应用（浏览器打开），单进程启动；**支持多账号与局域网访问**，所有数据集中在仓库根 `data/` |
 | 前端 | React 19 + TypeScript + Vite + Tailwind v4 + Radix/shadcn 风格组件 + framer-motion |
 | 后端 | Python 3.11 + FastAPI + SQLModel + SQLite（FTS5 + 向量暴力检索） |
 | 模型 | 任意 OpenAI 兼容端点（DeepSeek / OpenAI / Kimi / 通义 / 硅基流动 / Ollama…），填 baseURL + model + key |
@@ -19,7 +19,7 @@
 | 记忆 | 「联想记忆」：读取你的喜好档案 → 生成专属记忆卡 → FSRS 间隔复习 + 主动回忆 |
 | 扩展性 | **能力（Capability）插件化**：后端一个目录 + 前端一个目录 = 新功能；CLI 一键脚手架；工具自动进入 Agent 可调用列表；可选 MCP 互通 |
 | 首版闭环 | 上传 docx → 提问 → 流式回答 + 引用定位（下一步接入） |
-| 当前进度 | **v0.1.0 框架版已落地**：内核、能力插件、工具注册、迁移、任务中心、设置/模型接入、设计系统与前端骨架（详见 `docs/FRAMEWORK.md`） |
+| 当前进度 | **v0.2.0 已落地**：账号体系（注册/登录/会话/成员管理）、按用户的数据隔离、统一 `data/` 目录；框架（能力插件、工具注册、迁移、任务中心、模型接入、设计系统）与两个示例能力（速记、群聊简报） |
 
 ---
 
@@ -40,7 +40,7 @@
 ### 1.2 产品定位
 
 - **不是**「又一个 ChatGPT 套壳」：它是**有教材原文、有你个人偏好、有你学校通知**的私人助教。
-- **不是**「重型 SaaS」：单用户、本地运行、零运维，一条命令启动。
+- **不是**「重型 SaaS」：单实例、本地运行、零运维，一条命令启动；一个班/一个小组可以共用一个实例，账号之间数据隔离。
 - 三个差异化：
   1. **引用可信**：每个答案都能点回教材第几页/第几张幻灯片。
   2. **长在你的兴趣上**：喜好档案贯穿联想记忆、举例风格、出题口味。
@@ -207,7 +207,7 @@ flowchart LR
 **已在本机（macOS / Python 3.11.17 / SQLite 3.53.4）实测通过**：`fastapi 0.159.1`、`sqlmodel 0.0.48`、`pypdf 6.21.2`、`pdfplumber 0.11.10`、`python-docx 1.2.0`、`python-pptx 1.0.2`、`ebooklib 0.20`、`trafilatura 2.3.1`、`selectolax 1.0.1`、`openai 3.36.1`、`numpy 2.4.6`、`jieba 0.42.1`、`sqlite-vec 0.1.9` 全部一次安装成功；FTS5 与 sqlite-vec 均可加载；四种格式解析样例均已验证（详见 `docs/VERIFICATION.md`）。
 
 **为什么不是全栈 Node？** PDF/PPTX/EPUB 的高保真解析、中文正文抽取、后续可能的 OCR，Python 生态明显更稳。
-**为什么不是向量数据库？** 单用户数据量小；SQLite + numpy 少一个服务、少一处故障点，且备份就是一个文件。数据量增长后再切 sqlite-vec/远端向量库，接口已抽象。
+**为什么不是向量数据库？** 单实例数据量小；SQLite + numpy 少一个服务、少一处故障点，且备份就是一个文件。数据量增长后再切 sqlite-vec/远端向量库，接口已抽象。
 
 ### 2.3 仓库结构
 
@@ -219,8 +219,10 @@ teach_agent/
 │   │   │   ├── main.py                # 应用装配：路由 / 静态托管 / 启动钩子
 │   │   │   ├── config.py              # 设置（环境变量 + data/config.json）
 │   │   │   ├── db.py                  # 引擎 / 会话 / 迁移
-│   │   │   ├── models.py              # 核心表
+│   │   │   ├── models.py              # 核心表（含 users / sessions）
+│   │   │   ├── api/                   # auth / users / system / providers / jobs / settings
 │   │   │   ├── core/
+│   │   │   │   ├── auth.py             # 密码、会话、权限依赖、限流
 │   │   │   │   ├── llm.py             # OpenAI 兼容客户端（chat/embed/流式/工具调用/重试/计费）
 │   │   │   │   ├── crypto.py          # Fernet 密钥加解密
 │   │   │   │   ├── jobs.py            # 任务中心（线程池 + 状态机 + 进度）
@@ -270,8 +272,10 @@ teach_agent/
 
 | 表 | 关键字段 | 说明 |
 |---|---|---|
-| `settings` | key, value_json | 全局设置 |
-| `providers` | id, name, base_url, api_key_enc, chat_model, embed_model, is_default, extra_json | 模型供应商；key 加密 |
+| `users` | id, username, display_name, password_hash, role, is_active, created_at, last_login_at | 账号；密码 scrypt 加盐哈希 |
+| `sessions` | id(sha256(token)), user_id, expires_at, last_seen_at, user_agent | 会话；库里不存原始 token |
+| `settings` | key, value_json | 全局设置（站点级，仅管理员可写） |
+| `providers` | id, user_id, name, base_url, api_key_enc, chat_model, embed_model, is_default, extra_json | 模型供应商；key 加密；**按用户隔离** |
 | `courses` | id, name, color, term, description | 课程/学科 |
 | `documents` | id, course_id, title, kind, path, status, page_count, char_count, sha256, meta_json, created_at | 教材文件 |
 | `chunks` | id, document_id, ord, text, heading_path, loc_label(页/张), token_len, embedding BLOB | 检索单元 |
@@ -284,19 +288,25 @@ teach_agent/
 | `memory_cards` | id, course_id, chunk_id, front, back, mnemonic, imagery, kp_type, stability, difficulty, due_at, reps, lapses, last_review_at, state | 记忆卡（FSRS 字段） |
 | `reviews` | id, card_id, rating, elapsed_ms, reviewed_at, prev_interval, next_interval | 复习日志（曲线/统计） |
 | `quizzes` / `questions` / `attempts` / `wrong_book` | 见 M5 | 练习与错题 |
-| `jobs` | id, type, status, progress, payload_json, result_json, error, created_at, started_at, finished_at | 任务中心 |
-| `capability_state` | id, enabled, settings_json, updated_at | 能力开关与配置 |
-| `events` | id, kind, payload_json, created_at | 审计/时间线 |
+| `jobs` | id, user_id, type, status, progress, payload_json, result_json, error, created_at, started_at, finished_at | 任务中心；按用户隔离 |
+| `capability_state` | user_id, id, enabled, settings_json, updated_at | 能力开关与配置（联合主键，按用户隔离） |
+| `events` | id, user_id, kind, payload_json, created_at | 审计/时间线；按用户隔离 |
 
 索引：`chunks(document_id)`、`notices(category, deadline)`、`memory_cards(due_at)`、`messages(session_id, created_at)`、`chunks_fts` 虚拟表。
+
+**多用户约定**：除 `users` / `sessions` / `settings` / `_migrations` 外，所有业务表都必须带 `user_id`，API 层强制按当前登录用户过滤；能力表也遵守同一约定（见 `capability_state` 的联合主键）。
 
 ### 2.5 API 设计（REST + SSE）
 
 统一前缀 `/api`；错误统一 `{code, message, detail?}`；分页 `?limit&cursor`。
 
+**鉴权**：除 `/api/health` 与 `/api/auth/{config,login,register}` 外，所有接口都要求登录（Cookie 会话）；`/api/admin/*` 额外要求管理员。能力路由由框架统一挂上登录依赖。
+
 | 组 | 端点 |
 |---|---|
-| 设置/模型 | `GET/PUT /settings`；`GET/POST/PUT/DELETE /providers`；`POST /providers/{id}/test`；`POST /providers/{id}/models` |
+| 账号 | `GET /auth/config`（公开）；`POST /auth/register`、`POST /auth/login`、`POST /auth/logout`；`GET /auth/me`；`PUT /auth/password` |
+| 成员管理（管理员） | `GET/POST /admin/users`；`PATCH/DELETE /admin/users/{id}`；`POST /admin/users/{id}/password`；`PUT /admin/registration` |
+| 设置/模型 | `GET /settings`（全员）、`PUT /settings`（管理员）；`GET/POST/PUT/DELETE /providers`；`POST /providers/{id}/test`；`GET /providers/{id}/models` |
 | 教材库 | `GET/POST /courses`；`POST /documents`(multipart, ≤200MB)；`GET /documents`；`GET/DELETE /documents/{id}`；`GET /documents/{id}/chunks`；`POST /documents/{id}/reindex` |
 | 任务 | `GET /jobs`；`GET /jobs/{id}`；`POST /jobs/{id}/cancel`；`GET /jobs/stream`（全局 SSE） |
 | 答疑 | `GET/POST /chat/sessions`；`GET /chat/sessions/{id}`；`POST /chat/sessions/{id}/messages`（**SSE 流**）；`DELETE /chat/sessions/{id}` |
@@ -320,8 +330,10 @@ teach_agent/
 
 ### 2.6 配置与运行
 
-- `data/config.json`：端口、数据目录、默认模型、主题；环境变量可覆盖（`TJH_PORT` 等）。
+- 数据目录：**统一在仓库根 `data/`**（可用 `TJH_DATA_DIR` 改到别处）；`make backup` 打包，`make reset-data FORCE=1` 重置。
+- 环境变量：`TJH_HOST` / `TJH_PORT` / `TJH_DATA_DIR` / `TJH_COOKIE_SECURE` / `TJH_SESSION_DAYS` 等。
 - **API Key 只存密文**：首次启动生成 `data/secret.key`（0600），Fernet 加密后存库；前端只显示掩码 `sk-****abcd`，永不回传明文。
+- **密码只存哈希**：`hashlib.scrypt`（n=16384, r=8, p=1，每用户独立盐）；会话 token 只存 `sha256`。
 - 端口：后端 `8787`，开发前端 `5174`（代理 `/api` → 8787）。默认只监听 `127.0.0.1`。
 - 一条命令：`./scripts/start.sh`（首次自动建 venv、装依赖、构建前端、启动）。`make dev` 双进程热更新。
 
@@ -621,7 +633,8 @@ docs/capabilities/flashcards.md
 | 成本失控 | 长文档嵌入费用 | 预算上限、用量统计、可选纯 BM25 模式 |
 | 扫描版 PDF | 无文本层 | 检测后提示「需 OCR」，OCR 作为可选扩展能力（P5+） |
 | 大文件卡死 | 200MB PPT | 流式解析、后台 job、进度与取消、单文件大小限制 |
-| 数据丢失 | SQLite 单文件 | `data/` 一键备份/恢复；WAL；可选每日自动备份到本地目录 |
+| 数据丢失 | SQLite 单文件 | `data/` 一键备份/恢复（`make backup`）；WAL；`secret.key` 必须随库一起备份 |
+| 账号安全 | 密码、会话、越权 | scrypt 加盐哈希；会话库内只存哈希；Cookie `HttpOnly + SameSite=Lax`；登录限流；停用账号立即失效；所有查询强制 `user_id` 过滤 |
 
 ---
 
@@ -670,7 +683,7 @@ docker build -t tianjianhu . && docker run -p 8787:8787 -v ~/tianjianhu-data:/da
 | # | 决策 | 默认建议 |
 |---|---|---|
 | 1 | 产品名「天健湖 Tianjian Lake」是否合意 | 可换：砚台 / 学渡 / StudyMate |
-| 2 | 是否仅本人本地使用，需要多人共享吗 | 默认单用户本地；预留 `AUTH_TOKEN` 可 LAN 访问 |
+| 2 | 多用户形态 | 已实现单实例多账号：首个注册者为管理员，管理员可创建/停用成员；`HOST=0.0.0.0` 可 LAN 访问 |
 | 3 | 是否必须支持手机浏览器 | P5 做响应式，不做原生 App |
 | 4 | 扫描版 PDF 的 OCR 是否首版需要 | 首版仅检测并提示，OCR 作为扩展能力 |
 | 5 | 是否需要 Anki 导出 | 建议做（.apkg 用 genanki，成本低） |

@@ -59,6 +59,8 @@ function GroupLabel({ children }: { children: string }) {
 
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const capabilities = useApp((s) => s.capabilities);
+  const user = useApp((s) => s.user);
+  const info = useApp((s) => s.info);
   const enabled = capabilities.filter((c) => c.enabled && c.nav);
 
   return (
@@ -73,6 +75,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="space-y-0.5">
             <NavItem to="/" end icon="layout-dashboard" label="首页" onNavigate={onNavigate} />
             <NavItem to="/jobs" icon="list-checks" label="任务中心" onNavigate={onNavigate} />
+            {user?.role === "admin" ? (
+              <NavItem to="/admin/users" icon="users" label="成员管理" onNavigate={onNavigate} />
+            ) : null}
           </div>
         </div>
 
@@ -104,7 +109,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/settings" icon="settings" label="设置" onNavigate={onNavigate} />
         <div className="flex items-center justify-between px-2 pt-2">
           <ThemeToggle />
-          <span className="text-[10.5px] tracking-wider text-ink-faint/80">v0.1.0</span>
+          <span className="text-[10.5px] tracking-wider text-ink-faint/80">
+            v{info?.app.version ?? "0.2.0"}
+          </span>
         </div>
       </div>
     </div>

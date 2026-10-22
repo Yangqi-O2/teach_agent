@@ -13,6 +13,7 @@ class Digest(SQLModel, table=True):
     __tablename__ = "wechat_digests"
 
     id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, default=0)
     title: str = ""
     source: str = "paste"
     group_name: str = ""

@@ -64,12 +64,32 @@ export type Job = {
   finished_at: string | null;
 };
 
+export type User = {
+  id: number;
+  username: string;
+  display_name: string;
+  role: "admin" | "user" | string;
+  is_active: boolean;
+  created_at: string | null;
+  last_login_at: string | null;
+};
+
+export type AdminUser = User & { providers: number; jobs: number };
+
+export type AuthConfig = {
+  app: { name: string; version: string };
+  allow_registration: boolean;
+  has_users: boolean;
+};
+
 export type AppInfo = {
   app: { name: string; slug: string; version: string };
-  data_dir: string;
+  user: { id: number; username: string; display_name: string; role: string };
+  data_dir: string | null;
   web_dist_exists: boolean;
   providers: { total: number; with_key: number; default: string | null };
   capabilities: number;
+  enabled_capabilities: number;
   tools: number;
   time: string;
 };
@@ -253,6 +273,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(path, {
       ...init,
+      credentials: "same-origin",
       headers: {
         "Content-Type": "application/json",
         ...(init?.headers ?? {}),
@@ -274,6 +295,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       payload = null;
     }
+    if (response.status === 401 && !path.startsWith("/api/auth/login")) {
+      window.dispatchEvent(new Event("tjh:unauthorized"));
+    }
     throw new ApiError(
       payload?.message ?? `请求失败（HTTP ${response.status}）`,
       payload?.code ?? "http_error",
@@ -287,6 +311,53 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<{ ok: boolean }>("/api/health"),
+
+  auth: {
+    config: () => request<AuthConfig>("/api/auth/config"),
+    me: () => request<User>("/api/auth/me"),
+    login: (username: string, password: string) =>
+      request<User>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      }),
+    register: (username: string, password: string, display_name = "") =>
+      request<User>("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ username, password, display_name }),
+      }),
+    logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+    changePassword: (current_password: string, new_password: string) =>
+      request<{ ok: boolean }>("/api/auth/password", {
+        method: "PUT",
+        body: JSON.stringify({ current_password, new_password }),
+      }),
+  },
+
+  admin: {
+    users: () => request<AdminUser[]>("/api/admin/users"),
+    createUser: (input: {
+      username: string;
+      password: string;
+      display_name?: string;
+      role?: string;
+    }) => request<User>("/api/admin/users", { method: "POST", body: JSON.stringify(input) }),
+    updateUser: (
+      id: number,
+      patch: { display_name?: string; role?: string; is_active?: boolean },
+    ) => request<User>(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    resetPassword: (id: number, password: string) =>
+      request<{ ok: boolean }>(`/api/admin/users/${id}/password`, {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      }),
+    removeUser: (id: number) =>
+      request<{ ok: boolean }>(`/api/admin/users/${id}`, { method: "DELETE" }),
+    setRegistration: (allow: boolean) =>
+      request<{ ok: boolean; allow_registration: boolean }>("/api/admin/registration", {
+        method: "PUT",
+        body: JSON.stringify({ allow }),
+      }),
+  },
   info: () => request<AppInfo>("/api/info"),
   events: (limit = 12) => request<EventItem[]>(`/api/events?limit=${limit}`),
   tools: () => request<ToolInfo[]>("/api/tools"),

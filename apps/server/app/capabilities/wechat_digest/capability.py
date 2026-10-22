@@ -13,7 +13,7 @@ from sqlmodel import Session, col, select
 from ...core.capability import Capability, CapabilityManifest, NavItem
 from ...core.jobs import jobs as job_manager
 from ...core.llm import LLMClient, load_provider
-from ...core.tools import Tool
+from ...core.tools import Tool, ToolContext
 from ...db import engine
 from . import service
 from .jobs import JOB_TYPE, LLM_TIMEOUT, _friendly_error, run_digest_job
@@ -32,6 +32,7 @@ _job_registered = False
 
 
 async def _tool_summarize_group_chat(
+    ctx: ToolContext,
     text: str = "",
     group_name: str = "",
     style: str = "",
@@ -40,17 +41,23 @@ async def _tool_summarize_group_chat(
     text = (text or "").strip()
     if not text:
         raise ValueError("聊天记录为空，请传入 text 参数")
+    if not ctx.user_id:
+        raise ValueError("缺少用户上下文")
     params = {"text": text, "group_name": (group_name or "").strip() or "粘贴内容"}
 
     with Session(engine) as session:
-        settings = service.load_settings(session)
+        settings = service.load_settings(session, ctx.user_id)
         prepared = service.prepare("paste", params, settings["max_chars"])
         chosen_style = (style or "").strip() or settings["default_style"]
         if chosen_style not in STYLES:
             chosen_style = settings["default_style"]
-        runtime = load_provider(session, None)
+        runtime = load_provider(session, None, ctx.user_id)
         digest = service.create_digest(
-            session, prepared=prepared, style=chosen_style, runtime=runtime
+            session,
+            prepared=prepared,
+            style=chosen_style,
+            runtime=runtime,
+            user_id=ctx.user_id,
         )
         digest_id = int(digest.id or 0)
 
@@ -77,8 +84,9 @@ async def _tool_summarize_group_chat(
             # 与 jobs.py 一致：成功入库后按 history_limit 清理最早的历史
             service.trim_history(
                 session,
-                service.load_settings(session)["history_limit"],
+                service.load_settings(session, ctx.user_id)["history_limit"],
                 keep_id=digest_id,
+                user_id=ctx.user_id,
             )
     except Exception as exc:  # noqa: BLE001 - 失败落库后重新抛出，工具层返回 {"ok": false}
         log.exception("工具 summarize_group_chat 失败: digest=%s", digest_id)
@@ -103,7 +111,7 @@ async def _tool_summarize_group_chat(
     }
 
 
-def _tool_list_group_digests(limit: int = 10) -> list[dict]:
+def _tool_list_group_digests(ctx: ToolContext, limit: int = 10) -> list[dict]:
     """最近的简报摘要列表（契约 §7）。"""
     try:
         limit = max(1, min(int(limit or 10), 100))
@@ -111,7 +119,10 @@ def _tool_list_group_digests(limit: int = 10) -> list[dict]:
         limit = 10
     with Session(engine) as session:
         rows = session.exec(
-            select(Digest).order_by(col(Digest.created_at).desc(), col(Digest.id).desc()).limit(limit)
+            select(Digest)
+            .where(Digest.user_id == ctx.user_id)
+            .order_by(col(Digest.created_at).desc(), col(Digest.id).desc())
+            .limit(limit)
         ).all()
         return [service.summary_of(row) for row in rows]
 

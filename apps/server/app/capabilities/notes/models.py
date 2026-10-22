@@ -13,6 +13,7 @@ class Note(SQLModel, table=True):
     __tablename__ = "notes"
 
     id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, default=0)
     title: str = ""
     content: str = ""
     tags: str = ""                      # 逗号分隔，先简单存

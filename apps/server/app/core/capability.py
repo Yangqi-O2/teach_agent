@@ -108,10 +108,19 @@ class CapabilityRegistry:
                 registry.register(tool)
 
     def mount(self, app: Any) -> None:
+        """挂载能力路由，并统一要求登录（能力内部仍可用 current_user 拿到具体用户）。"""
+        from fastapi import Depends
+
+        from .auth import current_user
+
         for cap in self._caps.values():
             router = cap.router()
             if router is not None:
-                app.include_router(router, prefix=f"/api/c/{cap.manifest.id}")
+                app.include_router(
+                    router,
+                    prefix=f"/api/c/{cap.manifest.id}",
+                    dependencies=[Depends(current_user)],
+                )
 
 
 # 全局能力注册表（单例）：main 装配时 discover 一次，路由与工具都读它

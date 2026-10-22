@@ -205,6 +205,108 @@ def cmd_new_capability(args: argparse.Namespace) -> int:
     return 0
 
 
+
+
+def _prepare_db():
+    from .core.capability import capabilities
+    from .db import init_db
+
+    capabilities.discover()
+    init_db(capabilities.migration_dirs())
+    return capabilities
+
+
+def cmd_create_user(args: argparse.Namespace) -> int:
+    import secrets
+
+    from sqlmodel import Session, select
+
+    from .core import auth
+    from .db import engine
+    from .models import User
+
+    _prepare_db()
+    username = args.username.strip().lower()
+    try:
+        auth.validate_username(username)
+    except Exception as exc:  # noqa: BLE001
+        print(f"用户名不合法：{exc}")
+        return 1
+    password = args.password or secrets.token_urlsafe(12)
+    try:
+        auth.validate_password(password)
+    except Exception as exc:  # noqa: BLE001
+        print(f"密码不合法：{exc}")
+        return 1
+
+    with Session(engine) as db:
+        if db.exec(select(User).where(User.username == username)).first() is not None:
+            print(f"用户已存在：{username}")
+            return 1
+        role = "admin" if args.admin else "user"
+        user = User(
+            username=username,
+            display_name=args.display_name or username,
+            password_hash=auth.hash_password(password),
+            role=role,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        print(f"已创建用户：{username}（{role}）")
+        if not args.password:
+            print(f"初始密码：{password}   ← 请尽快修改")
+    return 0
+
+
+def cmd_list_users(_: argparse.Namespace) -> int:
+    from sqlmodel import Session, select
+
+    from .db import engine
+    from .models import User
+
+    _prepare_db()
+    with Session(engine) as db:
+        users = db.exec(select(User).order_by(User.id)).all()
+        if not users:
+            print("还没有任何用户，打开网页注册第一个账号即可（会成为管理员）。")
+            return 0
+        print(f"{'ID':<4}{'用户名':<22}{'角色':<8}{'状态':<6}显示名")
+        for user in users:
+            print(
+                f"{user.id:<4}{user.username:<22}{user.role:<8}"
+                f"{'启用' if user.is_active else '停用':<6}{user.display_name}"
+            )
+    return 0
+
+
+def cmd_set_password(args: argparse.Namespace) -> int:
+    import secrets
+
+    from sqlmodel import Session, select
+
+    from .core import auth
+    from .db import engine
+    from .models import Session as SessionRow
+    from .models import User
+
+    _prepare_db()
+    password = args.password or secrets.token_urlsafe(12)
+    with Session(engine) as db:
+        user = db.exec(select(User).where(User.username == args.username.strip().lower())).first()
+        if user is None:
+            print("用户不存在")
+            return 1
+        auth.validate_password(password)
+        user.password_hash = auth.hash_password(password)
+        db.add(user)
+        for row in db.exec(select(SessionRow).where(SessionRow.user_id == user.id)).all():
+            db.delete(row)
+        db.commit()
+        print(f"已重置 {user.username} 的密码：{password}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tianjianhu", description="天健湖命令行")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -220,6 +322,21 @@ def main(argv: list[str] | None = None) -> int:
 
     p_mig = sub.add_parser("migrate", help="执行数据库迁移")
     p_mig.set_defaults(func=cmd_migrate)
+
+    p_user = sub.add_parser("create-user", help="创建用户（首个用户请直接用网页注册）")
+    p_user.add_argument("username")
+    p_user.add_argument("--password", help="不填则随机生成并打印")
+    p_user.add_argument("--display-name", default="")
+    p_user.add_argument("--admin", action="store_true", help="设为管理员")
+    p_user.set_defaults(func=cmd_create_user)
+
+    p_list = sub.add_parser("list-users", help="列出所有用户")
+    p_list.set_defaults(func=cmd_list_users)
+
+    p_pwd = sub.add_parser("set-password", help="重置某个用户的密码")
+    p_pwd.add_argument("username")
+    p_pwd.add_argument("--password", help="不填则随机生成并打印")
+    p_pwd.set_defaults(func=cmd_set_password)
 
     p_new = sub.add_parser("new-capability", help="生成一个能力骨架（前后端）")
     p_new.add_argument("id")

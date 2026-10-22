@@ -93,7 +93,7 @@ def run_digest_job(ctx: JobContext, payload: dict) -> dict:
         # 2. 解析（核心异常会转成 ApiError，message 是给用户看的文案）
         ctx.progress(5, "解析聊天记录")
         with Session(engine) as session:
-            settings = service.load_settings(session)
+            settings = service.load_settings(session, ctx.user_id)
         prepared = service.prepare(source_id, params, settings["max_chars"])
 
         # 3. 清洗（prepare 内部已完成，这里只更新进度）
@@ -101,7 +101,7 @@ def run_digest_job(ctx: JobContext, payload: dict) -> dict:
 
         # 4. 取模型配置（没有供应商 / 没有 Key 会在 load_provider 抛 409 ApiError）
         with Session(engine) as session:
-            runtime = load_provider(session, provider_id)
+            runtime = load_provider(session, provider_id, ctx.user_id)
         client = LLMClient(runtime, timeout=LLM_TIMEOUT)
 
         # 5. Map-Reduce 总结

@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 
 import { Icon } from "../components/Icon";
+import { UserMenu } from "../components/UserMenu";
 import { cn } from "../lib/utils";
 import { useApp } from "../store/app";
 
@@ -14,6 +15,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     if (location.pathname === "/") return "首页";
     if (location.pathname.startsWith("/settings")) return "设置";
     if (location.pathname.startsWith("/jobs")) return "任务中心";
+    if (location.pathname.startsWith("/admin/users")) return "成员管理";
     const cap = capabilities.find((c) => c.nav && location.pathname.startsWith(c.nav.path));
     return cap?.nav?.label ?? "天健湖";
   })();
@@ -64,6 +66,8 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             />
             {provider ? provider.name : "未配置模型"}
           </Link>
+
+          <UserMenu />
         </div>
       </div>
     </header>

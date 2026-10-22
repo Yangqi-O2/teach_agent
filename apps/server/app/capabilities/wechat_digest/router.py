@@ -15,9 +15,11 @@ from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from sqlmodel import Session, col, select
 
+from ...core.auth import current_user
 from ...core.errors import ApiError
 from ...core.llm import load_provider
 from ...db import get_session
+from ...models import User
 from . import service
 from .models import Digest
 from .pipeline import exporters
@@ -46,9 +48,11 @@ class DigestIn(BaseModel):
 
 
 @router.get("/options")
-async def get_options(session: Session = Depends(get_session)) -> dict:
+async def get_options(
+    session: Session = Depends(get_session), user: User = Depends(current_user)
+) -> dict:
     """页面启动元数据：数据源、总结风格、能力设置。"""
-    settings = service.load_settings(session)
+    settings = service.load_settings(session, user.id or 0)
     return {
         "sources": list_sources(),
         "styles": list_styles(),
@@ -64,9 +68,13 @@ async def get_options(session: Session = Depends(get_session)) -> dict:
 
 
 @router.post("/preview")
-async def preview(body: PreviewIn, session: Session = Depends(get_session)) -> dict:
+async def preview(
+    body: PreviewIn,
+    session: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> dict:
     """只解析 + 清洗，不调用模型。"""
-    settings = service.load_settings(session)
+    settings = service.load_settings(session, user.id or 0)
     prepared = service.prepare(body.source, body.params, settings["max_chars"])
     return service.preview_of(prepared)
 
@@ -75,9 +83,13 @@ async def preview(body: PreviewIn, session: Session = Depends(get_session)) -> d
 
 
 @router.post("/digests", status_code=202)
-async def create_digest(body: DigestIn, session: Session = Depends(get_session)) -> dict:
+async def create_digest(
+    body: DigestIn,
+    session: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> dict:
     """校验通过后创建记录并提交后台任务，返回 202。"""
-    settings = service.load_settings(session)
+    settings = service.load_settings(session, user.id or 0)
 
     style = (body.style or "").strip() or settings["default_style"]
     if style not in STYLES:
@@ -85,7 +97,7 @@ async def create_digest(body: DigestIn, session: Session = Depends(get_session))
 
     # 先解析清洗（文本可解析、长度都在这里校验），再确认有可用模型
     prepared = service.prepare(body.source, body.params, settings["max_chars"])
-    runtime = load_provider(session, body.provider_id)  # 没有供应商 → 409 no_provider
+    runtime = load_provider(session, body.provider_id, user.id or 0)  # 没有供应商 → 409 no_provider
 
     digest, job_id = service.enqueue_digest(
         session,
@@ -94,6 +106,7 @@ async def create_digest(body: DigestIn, session: Session = Depends(get_session))
         runtime=runtime,
         provider_id=body.provider_id,
         history_limit=settings["history_limit"],
+        user_id=user.id or 0,
     )
     return {"ok": True, "job_id": job_id, "digest": service.summary_of(digest)}
 
@@ -103,9 +116,10 @@ async def list_digests(
     limit: int = Query(20, ge=1, le=100),
     q: str = "",
     session: Session = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[dict]:
     """历史列表；``q`` 对 title / group_name 做 LIKE 过滤。"""
-    stmt = select(Digest)
+    stmt = select(Digest).where(Digest.user_id == (user.id or 0))
     keyword = (q or "").strip()
     if keyword:
         like = f"%{keyword}%"
@@ -119,21 +133,29 @@ async def list_digests(
 # ---------------------------------------------------------------- 详情 / 删除 / 导出
 
 
-def _get_digest(session: Session, digest_id: int) -> Digest:
+def _get_digest(session: Session, digest_id: int, user_id: int) -> Digest:
     digest = session.get(Digest, digest_id)
-    if digest is None:
+    if digest is None or digest.user_id != user_id:
         raise ApiError("简报不存在", code="not_found", status=404)
     return digest
 
 
 @router.get("/digests/{digest_id}")
-async def get_digest(digest_id: int, session: Session = Depends(get_session)) -> dict:
-    return service.detail_of(_get_digest(session, digest_id))
+async def get_digest(
+    digest_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> dict:
+    return service.detail_of(_get_digest(session, digest_id, user.id or 0))
 
 
 @router.delete("/digests/{digest_id}")
-async def delete_digest(digest_id: int, session: Session = Depends(get_session)) -> dict:
-    digest = _get_digest(session, digest_id)
+async def delete_digest(
+    digest_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> dict:
+    digest = _get_digest(session, digest_id, user.id or 0)
     session.delete(digest)
     session.commit()
     return {"ok": True}
@@ -144,6 +166,7 @@ async def export_digest(
     digest_id: int,
     fmt: str = Query("txt", alias="format"),
     session: Session = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> Response:
     """导出文件下载：txt / json / md / ics。"""
     key = exporters.normalize_format(fmt)
@@ -153,7 +176,7 @@ async def export_digest(
             code="invalid_format",
             status=422,
         )
-    digest = _get_digest(session, digest_id)
+    digest = _get_digest(session, digest_id, user.id or 0)
     content = service.export_content(digest, key)
     filename = service.export_filename(digest, key)
     # Content-Disposition 同时给 ASCII 兜底名与 RFC 5987 的 UTF-8 中文名

@@ -49,14 +49,22 @@ def normalize_base_url(raw: str) -> str:
     return url
 
 
-def load_provider(session: Session, provider_id: int | None = None) -> ProviderRuntime:
+def load_provider(
+    session: Session, provider_id: int | None = None, user_id: int | None = None
+) -> ProviderRuntime:
+    """取某个用户的供应商；不传 user_id 时退回全局（仅 CLI 等内部场景）。"""
     provider: Provider | None = None
     if provider_id is not None:
         provider = session.get(Provider, provider_id)
+        if provider is not None and user_id is not None and provider.user_id != user_id:
+            provider = None
     else:
-        provider = session.exec(select(Provider).where(Provider.is_default == True)).first()  # noqa: E712
+        stmt = select(Provider)
+        if user_id is not None:
+            stmt = stmt.where(Provider.user_id == user_id)
+        provider = session.exec(stmt.where(Provider.is_default == True)).first()  # noqa: E712
         if provider is None:
-            provider = session.exec(select(Provider).order_by(Provider.id)).first()
+            provider = session.exec(stmt.order_by(Provider.id)).first()
     if provider is None:
         raise ApiError(
             "还没有配置模型供应商，请先在「设置 → 模型接入」里添加一个",

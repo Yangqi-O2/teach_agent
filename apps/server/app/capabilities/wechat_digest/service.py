@@ -45,10 +45,10 @@ def now_iso() -> str:
 # ---------------------------------------------------------------- 设置
 
 
-def load_settings(session: Session) -> dict[str, Any]:
-    """读取能力设置；缺失 / 非法值一律用默认值兜底。"""
+def load_settings(session: Session, user_id: int = 0) -> dict[str, Any]:
+    """读取当前用户的能力设置；缺失 / 非法值一律用默认值兜底。"""
     settings = dict(DEFAULT_SETTINGS)
-    state = session.get(CapabilityState, CAPABILITY_ID)
+    state = session.get(CapabilityState, (user_id, CAPABILITY_ID))
     if state is None or not state.settings_json:
         return settings
     try:
@@ -206,11 +206,13 @@ def create_digest(
     prepared: Prepared,
     style: str,
     runtime: Any,
+    user_id: int = 0,
 ) -> Digest:
     """创建一条 ``queued`` 简报记录并返回（还没提交任务）。"""
     now = now_iso()
     group_name = prepared.group_name or "粘贴内容"
     digest = Digest(
+        user_id=user_id,
         title=f"{group_name} · 群聊简报",
         source=prepared.source,
         group_name=group_name,
@@ -238,9 +240,12 @@ def enqueue_digest(
     runtime: Any,
     provider_id: int | None = None,
     history_limit: int = DEFAULT_SETTINGS["history_limit"],
+    user_id: int = 0,
 ) -> tuple[Digest, str]:
     """创建记录 + 提交后台任务，返回 ``(digest, job_id)``。"""
-    digest = create_digest(session, prepared=prepared, style=style, runtime=runtime)
+    digest = create_digest(
+        session, prepared=prepared, style=style, runtime=runtime, user_id=user_id
+    )
     assert digest.id is not None
     job_id = job_manager.submit(
         JOB_TYPE,
@@ -252,6 +257,7 @@ def enqueue_digest(
             "style": style,
             "provider_id": provider_id,
         },
+        user_id=user_id,
     )
     digest.job_id = job_id
     digest.updated_at = now_iso()
@@ -259,15 +265,19 @@ def enqueue_digest(
     session.commit()
     session.refresh(digest)
     log.info("群聊简报已入队: digest=%s job=%s", digest.id, job_id)
-    trim_history(session, history_limit, keep_id=digest.id)
+    trim_history(session, history_limit, keep_id=digest.id, user_id=user_id)
     return digest, job_id
 
 
-def trim_history(session: Session, limit: int, keep_id: int | None = None) -> int:
-    """只保留最近 ``limit`` 条已结束的简报，超出的删掉（契约 §8 history_limit）。"""
+def trim_history(
+    session: Session, limit: int, keep_id: int | None = None, user_id: int = 0
+) -> int:
+    """只保留该用户最近 ``limit`` 条已结束的简报，超出的删掉（契约 §8 history_limit）。"""
     limit = max(1, int(limit or DEFAULT_SETTINGS["history_limit"]))
     rows = session.exec(
-        select(Digest).order_by(col(Digest.created_at).desc(), col(Digest.id).desc())
+        select(Digest)
+        .where(Digest.user_id == user_id)
+        .order_by(col(Digest.created_at).desc(), col(Digest.id).desc())
     ).all()
     removed = 0
     for index, row in enumerate(rows):

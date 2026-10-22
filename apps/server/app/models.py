@@ -1,6 +1,7 @@
-"""核心数据表：供应商、任务、能力开关、事件、设置。
+"""核心数据表。
 
-能力自己的表不在这里，由各能力的 migrations/*.sql 负责。
+多用户模型：除 users / sessions / settings / _migrations 外，所有业务表都带 user_id，
+由 API 层强制按当前登录用户过滤。
 """
 from __future__ import annotations
 
@@ -13,10 +14,35 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+
+    id: int | None = Field(default=None, primary_key=True)
+    username: str = Field(index=True, unique=True)      # 小写，唯一
+    display_name: str = ""
+    password_hash: str = ""
+    role: str = "user"                                  # admin | user
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=utcnow)
+    last_login_at: datetime | None = None
+
+
+class Session(SQLModel, table=True):
+    __tablename__ = "sessions"
+
+    id: str = Field(primary_key=True)                   # sha256(token)，库中不存原始 token
+    user_id: int = Field(index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    last_seen_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime = Field(default_factory=utcnow)
+    user_agent: str | None = None
+
+
 class Provider(SQLModel, table=True):
     __tablename__ = "providers"
 
     id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, default=0)
     name: str
     base_url: str
     api_key_enc: str | None = None
@@ -29,6 +55,7 @@ class Provider(SQLModel, table=True):
 
 
 class Setting(SQLModel, table=True):
+    """全局设置（站点级），仅管理员可写。"""
     __tablename__ = "settings"
 
     key: str = Field(primary_key=True)
@@ -40,6 +67,7 @@ class Job(SQLModel, table=True):
     __tablename__ = "jobs"
 
     id: str = Field(primary_key=True)
+    user_id: int = Field(index=True, default=0)
     type: str
     title: str
     status: str = "queued"          # queued | running | done | error | cancelled
@@ -56,6 +84,7 @@ class Job(SQLModel, table=True):
 class CapabilityState(SQLModel, table=True):
     __tablename__ = "capability_state"
 
+    user_id: int = Field(primary_key=True, default=0)
     id: str = Field(primary_key=True)
     enabled: bool = True
     settings_json: str = "{}"
@@ -66,6 +95,7 @@ class Event(SQLModel, table=True):
     __tablename__ = "events"
 
     id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True, default=0)
     kind: str = "info"
     message: str = ""
     payload: str | None = None
