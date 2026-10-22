@@ -18,6 +18,7 @@
 | ⚙️ 任务中心 | 线程池、进度、取消、SSE 实时快照，给解析/抓取/嵌入这类耗时活儿用 |
 | 🎨 设计系统 | 米白纸感 + 湖蓝、明暗主题、⌘K 命令面板、模态/通知/空状态/动效 |
 | 📝 速记能力 | 示例能力，同时也是新能力的模板（含 Agent 工具 `create_note`） |
+| 📨 群聊简报 | 粘贴微信群 / QQ 群聊天记录 → 清洗降噪 → 「一句话 + 重要事项 + 待办 + 日程」，可导出 TXT / MD / ICS / JSON（含 Agent 工具 `summarize_group_chat`、`list_group_digests`） |
 
 规划中：教材库（Word/PPT/PDF/EPUB 解析与引用问答）· 校园雷达（教务处通知抓取）· 联想记忆（兴趣化助记 + 遗忘曲线）· 练习场 · 学习台。
 
@@ -55,6 +56,12 @@ make doctor
 |---|---|
 | ![模型接入](docs/screenshots/settings.png) | 设置 → 能力（开关 + 由 schema 自动渲染的设置表单） |
 
+| 群聊简报（亮色） | 群聊简报（深色） |
+|---|---|
+| ![群聊简报](docs/screenshots/wechat-digest-light.png) | ![群聊简报深色](docs/screenshots/wechat-digest-dark.png) |
+
+移动端（390px）见 [docs/screenshots/wechat-digest-mobile.png](docs/screenshots/wechat-digest-mobile.png)。
+
 ## 目录结构
 
 ```
@@ -87,6 +94,8 @@ cd apps/server
 |---|---|
 | [docs/DESIGN.md](docs/DESIGN.md) | 产品构想 + 技术设计（架构、数据模型、API、扩展性、路线图） |
 | [docs/FRAMEWORK.md](docs/FRAMEWORK.md) | 当前框架的实现说明：能力协议、工具、迁移、CLI、API |
+| [docs/WECHAT-DIGEST.md](docs/WECHAT-DIGEST.md) | 群聊简报能力的实现契约（数据源适配器、API、结果结构、扩展点） |
+| [docs/VERIFICATION-WECHAT.md](docs/VERIFICATION-WECHAT.md) | 群聊简报验收记录（单测 / 构建 / 本地 mock 模型 E2E / 截图 / UI 一致性） |
 | [docs/VERIFICATION.md](docs/VERIFICATION.md) | 后端依赖 / 四种教材格式解析 / FTS5 + 混合检索实测 |
 | [docs/VERIFICATION-CRAWLER.md](docs/VERIFICATION-CRAWLER.md) | 8 所高校教务处通知页抓取可行性实测 |
 

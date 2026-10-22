@@ -12,3 +12,6 @@ python-multipart>=0.0.9
 # —— 后续能力接入时再逐步加入（教材解析 / 检索 / 爬虫）——
 # python-docx, python-pptx, pypdf, pdfplumber, ebooklib, beautifulsoup4, lxml,
 # trafilatura, selectolax, numpy, jieba, sqlite-vec
+
+# —— 测试 ——
+pytest>=8.0

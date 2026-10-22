@@ -101,6 +101,139 @@ export type Note = {
   updated_at: string | null;
 };
 
+/* ---------------- 群聊简报（wechat_digest） ---------------- */
+
+export type DigestParamProperty = {
+  type?: string;
+  format?: string;
+  title?: string;
+  description?: string;
+  default?: string | number | boolean | null;
+  required?: boolean;
+  enum?: string[];
+};
+
+export type DigestSource = {
+  id: string;
+  name: string;
+  description: string;
+  badge: string | null;
+  available: boolean;
+  hint: string | null;
+  sample_params: Record<string, unknown> | null;
+  params_schema: {
+    type?: string;
+    properties?: Record<string, DigestParamProperty>;
+  };
+};
+
+export type DigestStyle = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+export type DigestOptions = {
+  sources: DigestSource[];
+  styles: DigestStyle[];
+  settings: {
+    default_style?: string;
+    max_chars?: number;
+    history_limit?: number;
+  };
+};
+
+export type DigestCreateInput = {
+  source: string;
+  params: Record<string, string>;
+  style?: string;
+  provider_id?: number | null;
+};
+
+export type DigestPreviewGroup = {
+  name: string;
+  before: number;
+  after: number;
+  dropped: number;
+  drop_reasons?: Record<string, number>;
+};
+
+export type DigestSampleMessage = {
+  time: string;
+  sender: string;
+  text: string;
+};
+
+export type DigestPreview = {
+  ok: boolean;
+  source: string;
+  total_before: number;
+  total_after: number;
+  groups: DigestPreviewGroup[];
+  sample: DigestSampleMessage[];
+};
+
+export type DigestSchedule = {
+  title: string;
+  datetime: string;
+  note: string;
+  done: boolean;
+  source_sender: string;
+};
+
+export type DigestGroup = {
+  name: string;
+  message_count: number;
+  one_line: string;
+  items: string[];
+  schedules: DigestSchedule[];
+  structured_text: string;
+};
+
+export type DigestPayload = {
+  version: number;
+  source: string;
+  group_name: string;
+  style: string;
+  provider: string;
+  model: string;
+  created_at: string;
+  stats: { before: number; after: number; dropped: number; chunks: number };
+  groups: DigestGroup[];
+};
+
+export type DigestStatus = "queued" | "running" | "done" | "error" | "cancelled";
+
+export type DigestSummary = {
+  id: number;
+  title: string;
+  group_name: string;
+  source: string;
+  style: string;
+  status: DigestStatus | string;
+  provider: string;
+  model: string;
+  message_count: number;
+  kept_count: number;
+  one_line: string;
+  created_at: string;
+};
+
+export type DigestDetail = DigestSummary & {
+  job_id: string | null;
+  error: string | null;
+  updated_at: string;
+  result: DigestPayload | null;
+};
+
+export type DigestCreateResponse = {
+  ok: boolean;
+  job_id: string;
+  digest: DigestSummary;
+};
+
+export type DigestExportFormat = "txt" | "json" | "md" | "ics";
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -200,5 +333,28 @@ export const api = {
       request<Note>("/api/c/notes/items", { method: "POST", body: JSON.stringify(input) }),
     remove: (id: number) =>
       request<{ ok: boolean }>(`/api/c/notes/items/${id}`, { method: "DELETE" }),
+  },
+
+  digest: {
+    options: () => request<DigestOptions>("/api/c/wechat_digest/options"),
+    preview: (input: DigestCreateInput) =>
+      request<DigestPreview>("/api/c/wechat_digest/preview", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    create: (input: DigestCreateInput) =>
+      request<DigestCreateResponse>("/api/c/wechat_digest/digests", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    list: (limit = 20, q = "") =>
+      request<DigestSummary[]>(
+        `/api/c/wechat_digest/digests?limit=${limit}${q ? `&q=${encodeURIComponent(q)}` : ""}`,
+      ),
+    get: (id: number) => request<DigestDetail>(`/api/c/wechat_digest/digests/${id}`),
+    remove: (id: number) =>
+      request<{ ok: boolean }>(`/api/c/wechat_digest/digests/${id}`, { method: "DELETE" }),
+    exportUrl: (id: number, format: DigestExportFormat) =>
+      `/api/c/wechat_digest/digests/${id}/export?format=${format}`,
   },
 };
