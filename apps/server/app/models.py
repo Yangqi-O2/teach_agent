@@ -27,6 +27,29 @@ class User(SQLModel, table=True):
     last_login_at: datetime | None = None
 
 
+class UserProfile(SQLModel, table=True):
+    """用户画像（1:1 users）。
+
+    放在内核而不是某个能力里，是因为它要服务的不止「校园雷达」：
+    答疑时的举例口味、记忆卡的联想素材、通知的过滤偏好都会读它。
+    各能力只读不写，写入口只有 `PUT /api/profile`。
+    """
+
+    __tablename__ = "user_profiles"
+
+    user_id: int = Field(primary_key=True)
+    school: str = ""                                    # 所在学校（展示用原文）
+    school_key: str = Field(default="", index=True)      # 归一化 key，如 zzu
+    grade: str = ""                                      # 年级：2024 / 大二 / 研一
+    department: str = ""                                 # 院系
+    major: str = ""                                      # 专业
+    class_name: str = ""                                 # 班级
+    interests_json: str = "[]"                           # 兴趣标签，JSON 数组
+    goals_json: str = "[]"                               # 目标，JSON 数组（考研/就业/竞赛…）
+    onboarded: bool = False                              # 是否完成引导（决定是否强制跳转）
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class Session(SQLModel, table=True):
     __tablename__ = "sessions"
 

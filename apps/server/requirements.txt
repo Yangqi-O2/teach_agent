@@ -9,9 +9,35 @@ cryptography>=43.0.0
 sse-starlette==3.5.0
 python-multipart>=0.0.9
 
-# —— 后续能力接入时再逐步加入（教材解析 / 检索 / 爬虫）——
-# python-docx, python-pptx, pypdf, pdfplumber, ebooklib, beautifulsoup4, lxml,
-# trafilatura, selectolax, numpy, jieba, sqlite-vec
+# —— 教材 / 资料解析（教材库、情景英语资料导入共用）——
+python-docx>=1.2.0
+python-pptx>=1.0.2
+pypdf>=6.0.0
+pdfplumber>=0.11.0
+EbookLib>=0.20
+beautifulsoup4>=4.13.0
+lxml>=6.0.0
+trafilatura>=2.0.0
+pillow>=10.0.0
+
+# —— 教材库检索（FTS5 中文预切词 + 可选向量融合）——
+jieba>=0.42.1
+numpy>=1.26
+
+# —— 教材库 OCR ——
+# macOS：不需要任何依赖。内置 Vision 方案会用 swiftc 现场编译一个小工具，
+#        同时负责 PDF 栅格化与文字识别（见 capabilities/library/ocr.py）。
+# 非 macOS：需要本机装 tesseract（含 chi_sim 中文包）；PDF 栅格化用下面的 pypdfium2。
+#        它是纯 wheel，Linux / Windows / macOS 都能直接 pip 装，不依赖系统库。
+pypdfium2>=4.30
+
+# 需要 tesseract 时的安装方式（三选一，按发行版）：
+#   Debian/Ubuntu  sudo apt install tesseract-ocr tesseract-ocr-chi-sim
+#   Fedora/RHEL    sudo dnf install tesseract tesseract-langpack-chi_sim
+#   Arch           sudo pacman -S tesseract tesseract-data-chi_sim
+# Windows 安装包勾选 chi_sim；若不在 PATH，设置 TJH_TESSERACT_CMD 指向 tesseract.exe。
+# PyMuPDF 是可选的替代栅格化后端，装了会优先于 pypdfium2 之外的场景被识别：
+# pymupdf>=1.24.0
 
 # —— 测试 ——
 pytest>=8.0

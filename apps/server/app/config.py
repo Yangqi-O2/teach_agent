@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "天健湖"
 APP_SLUG = "tianjianhu"
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 BASE_DIR = Path(__file__).resolve().parent.parent      # apps/server
 PROJECT_DIR = BASE_DIR.parent.parent                   # 仓库根目录
@@ -36,6 +36,27 @@ class Settings(BaseSettings):
     login_max_attempts: int = 8
     login_window_seconds: int = 300
     password_min_length: int = 8
+
+    # —— 运行环境与安全 ——
+    env: str = "development"              # development | production
+    docs_enabled: bool | None = None       # 留空 = 生产环境自动关闭 /api/docs
+    security_headers: bool = True
+    cross_origin_guard: bool = True        # 写请求的来源校验（CSRF 兜底）
+    hsts_seconds: int = 0                  # >0 时下发 HSTS，仅在 HTTPS 部署时设置
+
+    # —— 后台任务 ——
+    campus_scheduler: bool = True          # 关掉后校园雷达只能手动更新（测试/外部 cron 场景）
+
+    @property
+    def is_production(self) -> bool:
+        return self.env.strip().lower() in ("production", "prod")
+
+    @property
+    def expose_docs(self) -> bool:
+        """接口文档在公网暴露等于把攻击面画成地图，生产环境默认关闭。"""
+        if self.docs_enabled is not None:
+            return self.docs_enabled
+        return not self.is_production
 
     @property
     def db_path(self) -> Path:

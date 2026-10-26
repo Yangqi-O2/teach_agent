@@ -24,6 +24,15 @@ const TYPE_ICON: Record<string, string> = {
   quiz: "pencil-line",
 };
 
+/**
+ * 任务类型是 `能力名.动作`（如 library.ingest），直接查表永远查不到，
+ * 会全部退化成默认图标。这里先取最后一段动作名再匹配。
+ */
+function iconForType(type: string): string {
+  const action = type.includes(".") ? type.split(".").pop()! : type;
+  return TYPE_ICON[action] ?? TYPE_ICON[type] ?? "list-checks";
+}
+
 type Filter = "all" | "active" | "done" | "error";
 
 export function Jobs() {
@@ -112,18 +121,19 @@ export function Jobs() {
         <EmptyState
           icon="list-checks"
           title="还没有任务"
-          description="等教材库、校园雷达这些能力接进来以后，解析与抓取任务会出现在这里；现在它是空的也很正常。"
+          description="上传教材后，解析与建立索引会作为后台任务出现在这里，进度实时更新。"
         />
       ) : (
         <div className="stagger space-y-3">
           {filtered.map((job) => {
-            const meta = STATUS_META[job.status] ?? STATUS_META.queued;
+            // 未知状态不要伪装成「排队中」——直接显示原值，免得把失败看成等待
+            const meta = STATUS_META[job.status] ?? { label: job.status || "未知状态", tone: "neutral" as const };
             const active = job.status === "running" || job.status === "queued";
             return (
               <article key={job.id} className="card p-5">
                 <div className="flex items-start gap-4">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-ink-soft">
-                    <Icon name={TYPE_ICON[job.type] ?? "list-checks"} className="h-[18px] w-[18px]" />
+                    <Icon name={iconForType(job.type)} className="h-[18px] w-[18px]" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">

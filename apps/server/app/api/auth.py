@@ -18,6 +18,15 @@ class RegisterIn(BaseModel):
     username: str = Field(min_length=3, max_length=24)
     password: str = Field(min_length=1)
     display_name: str = ""
+    # 注册第二步（个人基本信息）可以直接带上来；也可以先注册再 PUT /api/profile。
+    # 全部可选，老客户端不受影响。
+    school: str | None = Field(default=None, max_length=60)
+    grade: str | None = Field(default=None, max_length=30)
+    department: str | None = Field(default=None, max_length=60)
+    major: str | None = Field(default=None, max_length=60)
+    class_name: str | None = Field(default=None, max_length=60)
+    interests: list[str] | str | None = None
+    goals: list[str] | str | None = None
 
 
 class LoginIn(BaseModel):
@@ -58,7 +67,27 @@ async def register(
     response: Response,
     db: DBSession = Depends(get_session),
 ) -> dict:
-    user, token = auth.register(db, body.username, body.password, body.display_name, request)
+    profile_fields = {
+        key: getattr(body, key)
+        for key in (
+            "school",
+            "grade",
+            "department",
+            "major",
+            "class_name",
+            "interests",
+            "goals",
+        )
+        if getattr(body, key) is not None
+    }
+    user, token = auth.register(
+        db,
+        body.username,
+        body.password,
+        body.display_name,
+        request,
+        profile=profile_fields or None,
+    )
     auth.set_cookie(response, token)
     return public_user(user)
 

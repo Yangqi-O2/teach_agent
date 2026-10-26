@@ -3,12 +3,15 @@
 > 验收日期：2026-10-22 · 验收人：独立验收（verifier teammate）
 > 对应契约：[docs/WECHAT-DIGEST.md](WECHAT-DIGEST.md) §9 验证清单
 > 结论：**通过**（下方逐项列出证据；两处前端小修在 §7 说明）
+>
+> **本文档**：群聊简报的独立验收记录（契约核对、E2E、导出、UI、边界）
+> ｜ **路径**：`docs/VERIFICATION-WECHAT.md` ｜ **状态**：📦 2026-10 快照，不随代码更新
 
 ## 1. 验收环境
 
 | 项 | 值 |
 |---|---|
-| 仓库 | `/Users/yangqi/teach_agent`（提交 `7dfd0a0` + 本次未提交改动） |
+| 仓库 | 仓库根目录（提交 `7dfd0a0` + 当时工作区改动） |
 | Python | 3.11.17（`apps/server/.venv`，FastAPI 0.159.1 / SQLModel 0.0.48） |
 | Node / pnpm | v26.8.1 / 11.24.0 |
 | 临时后端 | `TJH_DATA_DIR=/tmp/tjh-digest-e2e .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8799`（**全新数据目录**，未动 8787 正式实例） |

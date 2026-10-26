@@ -144,6 +144,7 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: int | None = None,
         tools: list[dict] | None = None,
+        response_format: dict | None = None,
     ) -> dict:
         try:
             resp = await self.client.chat.completions.create(
@@ -152,6 +153,7 @@ class LLMClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 tools=tools or None,
+                response_format=response_format,
             )
         except Exception as exc:  # noqa: BLE001
             raise self._as_api_error(exc) from exc

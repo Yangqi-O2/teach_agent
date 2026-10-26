@@ -2,6 +2,10 @@
 
 > 环境：macOS / Apple M4 / Python 3.11.17（`/opt/homebrew/bin/python3.11`）/ SQLite 3.53.4 / venv。
 > 结论：**所选后端依赖全部一次安装成功，四种格式解析、FTS5、sqlite-vec、混合检索均验证通过。**
+>
+> **本文档**：技术选型阶段的实测记录（依赖版本、解析能力、检索性能）
+> ｜ **路径**：`docs/VERIFICATION.md` ｜ **状态**：📦 2026-10 快照，记录当时结果，不随代码更新
+> ｜ 相关：[`VERIFICATION-CRAWLER.md`](VERIFICATION-CRAWLER.md)（爬虫）、[`VERIFICATION-WECHAT.md`](VERIFICATION-WECHAT.md)（能力验收）
 
 ## 1. 依赖版本（实测）
 

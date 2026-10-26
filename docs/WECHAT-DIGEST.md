@@ -3,6 +3,10 @@
 > 状态：**已实现并通过独立验收**（2026-10-22）。本文既是设计说明，也是前后端并行开发的接口契约；实现与契约一致，验收证据见 [docs/VERIFICATION-WECHAT.md](VERIFICATION-WECHAT.md)。
 > 背景：`python_work/wechat_ai` 已把「微信群聊 AI 总结」跑通（粘贴解析、多级清洗、防幻觉提示词、Map-Reduce、结构化日程/待办）。
 > 本次目标：**把它作为天健湖的一个能力接进来，复用天健湖的内核与设计系统，而不是复制一个独立小应用。**
+>
+> **本文档**：群聊简报的实现契约（数据模型、API、结果结构、扩展点、前端约定）
+> ｜ **路径**：`docs/WECHAT-DIGEST.md` ｜ **状态**：✅ 与 v0.3.0 代码一致
+> ｜ 该能力成熟度为 `beta`（公测中），验收证据见 [`VERIFICATION-WECHAT.md`](VERIFICATION-WECHAT.md)
 
 ---
 

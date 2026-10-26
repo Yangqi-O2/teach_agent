@@ -1,0 +1,18 @@
+# Docker 构建时排除（不影响本地开发）
+
+.git
+.gitignore
+.venv
+**/.venv
+node_modules
+**/node_modules
+**/__pycache__
+**/*.pyc
+apps/web/dist
+data
+.tmp
+.workbuddy
+backups
+docs/screenshots
+*.log
+.DS_Store

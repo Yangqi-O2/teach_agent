@@ -2,8 +2,10 @@ import {
   AlertCircle,
   ArrowUpRight,
   BookOpen,
+  Bookmark,
   Brain,
   Calendar,
+  ChartColumn,
   Check,
   ChevronDown,
   ChevronRight,
@@ -19,6 +21,7 @@ import {
   GraduationCap,
   History,
   KeyRound,
+  Languages,
   LayoutDashboard,
   Library,
   Lightbulb,
@@ -29,6 +32,7 @@ import {
   Moon,
   NotebookPen,
   Palette,
+  PanelRightOpen,
   PencilLine,
   Play,
   Plus,
@@ -36,6 +40,7 @@ import {
   Radar,
   RefreshCw,
   Search,
+  Send,
   Server,
   Settings,
   ShieldCheck,
@@ -61,6 +66,7 @@ import { cn } from "../lib/utils";
 const MAP: Record<string, LucideIcon> = {
   "notebook-pen": NotebookPen,
   "book-open": BookOpen,
+  bookmark: Bookmark,
   "message-square": MessageSquare,
   radar: Radar,
   brain: Brain,
@@ -68,6 +74,10 @@ const MAP: Record<string, LucideIcon> = {
   "layout-dashboard": LayoutDashboard,
   library: Library,
   "graduation-cap": GraduationCap,
+  languages: Languages,
+  "chart-column": ChartColumn,
+  "panel-right-open": PanelRightOpen,
+  send: Send,
   sparkles: Sparkles,
   settings: Settings,
   search: Search,
@@ -129,8 +139,4 @@ type IconProps = {
 export function Icon({ name, className, strokeWidth = 1.8 }: IconProps) {
   const Component = getIcon(name);
   return <Component className={cn("h-5 w-5", className)} strokeWidth={strokeWidth} />;
-}
-
-export function Spinner({ className }: { className?: string }) {
-  return <Loader2 className={cn("h-4 w-4 animate-spin", className)} strokeWidth={2} />;
 }

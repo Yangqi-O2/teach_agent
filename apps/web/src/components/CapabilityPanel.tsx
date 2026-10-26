@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Icon } from "./Icon";
 import { Badge, Button, Field, Input, Switch } from "./ui/primitives";
 import { api, type CapabilityInfo, type SettingProp } from "../lib/api";
-import { cn } from "../lib/utils";
+import { capabilityStatusMeta, cn } from "../lib/utils";
 import { useApp } from "../store/app";
 
 function SchemaField({
@@ -110,6 +110,7 @@ function CapabilityRow({ cap }: { cap: CapabilityInfo }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-display text-[15.5px] font-semibold text-ink">{cap.name}</h3>
+            <Badge tone={capabilityStatusMeta(cap.status).tone}>{capabilityStatusMeta(cap.status).label}</Badge>
             <Badge tone="outline">v{cap.version}</Badge>
             {cap.has_tools ? <Badge tone="brand">Agent 工具</Badge> : null}
             {hasSettings ? <Badge tone="neutral">可配置</Badge> : null}

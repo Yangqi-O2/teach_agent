@@ -32,6 +32,9 @@ _SCRYPT = {"n": 2**14, "r": 8, "p": 1, "dklen": 32}
 
 # 登录失败限流（进程内）。单机部署足够；多进程部署需要换 Redis。
 _attempts: dict[str, list[float]] = {}
+# 上限：key 里含用户名，攻击者扫不同账号会让字典无限增长。
+# 超过上限时按「最久未活动」淘汰，内存与延迟都可控。
+_MAX_TRACKED_KEYS = 10_000
 
 
 def _now() -> datetime:
@@ -205,11 +208,24 @@ def count_users(db: DBSession) -> int:
 
 # ---------------- 限流 ----------------
 
+def _prune_attempts(now: float, window: float) -> None:
+    """先清过期项；仍然超限时按最久未活动淘汰，避免字典被扫号撑爆。"""
+    for key in [k for k, v in _attempts.items() if not v or now - v[-1] >= window]:
+        _attempts.pop(key, None)
+    overflow = len(_attempts) - _MAX_TRACKED_KEYS
+    if overflow > 0:
+        ordered = sorted(_attempts.items(), key=lambda item: item[1][-1] if item[1] else 0.0)
+        for key, _ in ordered[:overflow]:
+            _attempts.pop(key, None)
+
+
 def rate_limit_check(key: str) -> None:
     now = time.time()
     window = settings.login_window_seconds
     hits = [t for t in _attempts.get(key, []) if now - t < window]
     _attempts[key] = hits
+    if len(_attempts) > _MAX_TRACKED_KEYS:
+        _prune_attempts(now, window)
     if len(hits) >= settings.login_max_attempts:
         raise ApiError(
             "尝试次数过多，请稍后再试", code="rate_limited", status=429
@@ -248,6 +264,7 @@ def register(
     password: str,
     display_name: str = "",
     request: Request | None = None,
+    profile: dict | None = None,
 ) -> tuple[User, str]:
     username = validate_username(username)
     validate_password(password)
@@ -276,6 +293,15 @@ def register(
         log.info("首个用户 %s 已创建，角色 admin", username)
 
     token = create_session(db, user, request)
+    if profile:
+        # 注册时顺带建档。放在建号之后：即使画像字段有脏值，账号也已经创建成功，
+        # 用户可以之后在设置页补填，不会因为一个兴趣标签写错就注册失败。
+        from . import profile as profiles
+
+        try:
+            profiles.upsert(db, user.id or 0, profile)
+        except Exception:  # noqa: BLE001
+            log.exception("注册时写入画像失败（不影响账号创建）")
     log_event(db, user.id or 0, "auth", f"注册了新账号：{user.display_name}")
     return user, token
 

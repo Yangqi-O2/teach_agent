@@ -1,7 +1,11 @@
-# 天健湖 · 框架说明（v0.2.0）
+# 天健湖 · 框架说明（v0.3.0）
 
 > v0.1 做了「总体框架」；v0.2 补上了**账号体系、按用户的数据隔离**，并把所有运行期数据收进仓库根的 `data/`。
-> 教材库 / 校园雷达 / 联想记忆等能力继续按同一套能力协议逐个接入，**不需要改内核**。
+> v0.3 把独立子项目「情景式英语对话」全量移植为 `english` 能力并入主站；教材库 / 校园雷达 / 联想记忆等
+> 能力继续按同一套能力协议逐个接入，**不需要改内核**。
+>
+> **本文档**：讲内核怎么搭、能力协议怎么用、怎么接入新能力 ｜ **路径**：`docs/FRAMEWORK.md`
+> ｜ **状态**：✅ 与 v0.3.0 代码一致 ｜ **读者**：要改代码的人（必读）
 
 ---
 
@@ -29,7 +33,7 @@ apps/server/                     Python 后端（FastAPI）
 │   │   ├── providers.py         供应商 CRUD / 测试 / 默认（按用户）
 │   │   ├── jobs.py              任务列表 / 取消 / SSE（按用户）
 │   │   └── settings.py          站点设置（管理员可写）
-│   ├── capabilities/            能力插件（notes 速记、wechat_digest 群聊简报）
+│   ├── capabilities/            能力插件（notes 速记、wechat_digest 群聊简报、english 情景英语、library 教材库）
 │   ├── migrations/              核心迁移（预留）
 │   └── cli.py                   run / doctor / migrate / new-capability / 用户管理
 ├── requirements.txt
@@ -151,6 +155,14 @@ class NotesCapability(Capability):
 | 设置 | `settings_schema`（JSON Schema 子集），按用户存 `capability_state` |
 | 开关 | 禁用后导航消失、工具不暴露；数据保留 |
 
+> **参考实现**：`english`（情景英语）是目前用到全部协议要素的能力——路由（20 个接口，含 SSE）、
+> 14 张迁移表的 SQLite schema、按用户设置（9 项）、3 个 Agent 工具、以及 `agents/` 下 17 个可测试模块。
+> 新能力可以先读 `docs/ENGLISH.md`，再对照 `app/capabilities/english/` 抄结构。
+>
+> **另一个参考**：`library`（教材库）演示了「文件上传 + 任务中心 + 后台解析 + 二次消费」这类
+> 非对话型能力怎么写——multipart 上传、`jobs.submit` 异步解析、状态机与告警回填、SSE 问答。
+> 契约见 `docs/LIBRARY.md`。
+
 ---
 
 ## 5. 数据目录 `data/`
@@ -239,7 +251,7 @@ cd apps/server
 
 ---
 
-## 10. HTTP API（v0.2.0）
+## 10. HTTP API（v0.3.0）
 
 **公开**：`GET /api/health`、`GET /api/auth/config`、`POST /api/auth/register`、`POST /api/auth/login`
 
@@ -269,7 +281,18 @@ cd apps/server
 | PUT | `/api/admin/registration` | 开放 / 关闭自助注册 |
 | GET/POST | `/api/c/notes/items` | 速记（按用户） |
 | GET/POST | `/api/c/wechat_digest/*` | 群聊简报（按用户） |
-| GET | `/api/docs` | Swagger UI |
+| GET | `/api/c/english/*` | 情景英语：场景、话题、对话（SSE）、词汇、统计等 20 个接口 |
+| GET | `/api/c/library/health` | 教材库自检（支持的格式、OCR 引擎状态） |
+| GET/POST/PATCH/DELETE | `/api/c/library/courses` | 教材分类（private / shared） |
+| GET/POST/PATCH/DELETE | `/api/c/library/documents` | 教材：列表、详情、分块预览、上传、改名、重解析、删除 |
+| GET | `/api/c/library/search` | 原文检索（BM25 + 向量 RRF） |
+| POST | `/api/c/library/qa`、`/qa/stream` | 基于指定教材的问答（普通 / SSE 流式） |
+| GET | `/api/c/library/qa/threads` | 问答历史 |
+| GET/PUT | `/api/profile` | 用户画像：学校 / 年级 / 院系 / 专业 / 班级 / 兴趣 / 目标（局部更新） |
+| GET | `/api/c/campus/feed` · `/digest` · `/health` | 校园雷达信息流（按画像排序）/ 概览 / 源状态 |
+| POST | `/api/c/campus/ask` | 结合画像总结校园通知 |
+| POST/PUT/PATCH/DELETE | `/api/c/campus/*`（config / crawl / sources / seed-demo） | **仅管理员**：抓取间隔、手动更新、源开关、示例数据 |
+| GET | `/api/docs` | Swagger UI（`TJH_ENV=production` 时关闭） |
 
 错误统一 `{code, message, detail?}`；401 未登录、403 权限不足。
 
@@ -299,5 +322,9 @@ cd apps/server
 - **会话固定 30 天**，不做滚动续期（只刷新 `last_seen`）。
 - **能力禁用是软隔离**：路由仍可达（但强制登录），仅隐藏导航、移除工具。
 - **Agent 主循环尚未接入**：工具已带 user 上下文，但还没有聊天界面调用它们。
-- **CSRF**：依赖 `SameSite=Lax` + JSON 请求；若前后端跨站部署需要额外 token。
+- **CSRF**：`SameSite=Lax` Cookie + 写请求的来源校验（`core/security.py: OriginGuard`，
+  跨站 Origin/Referer 直接 403）。仍未引入 CSRF token——**前后端分域部署时要重新评估**。
+- **安全头由应用下发**（CSP / X-Frame-Options / nosniff 等）；用 nginx 直出静态文件时，
+  需要在 nginx 侧补同样的头（`deploy/nginx/security-headers.conf`），两处 CSP 必须保持一致。
+- **接口文档**：`TJH_ENV=production` 时 `/api/docs` 与 `/api/openapi.json` 返回 404。
 - 中文界面，无 i18n。

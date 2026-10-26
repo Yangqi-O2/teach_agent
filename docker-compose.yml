@@ -1,0 +1,37 @@
+# 天健湖 · docker compose（跨平台一键起）
+#
+#   docker compose up -d --build      # 构建并启动
+#   docker compose logs -f            # 看日志
+#   docker compose down               # 停止（数据保留在 ./data）
+#
+# 数据落在宿主机的 ./data，容器删了也不丢。
+
+services:
+  tianjianhu:
+    build: .
+    image: tianjianhu:0.3.0
+    container_name: tianjianhu
+    ports:
+      - "8787:8787"
+    volumes:
+      # 数据库、secret.key、上传的教材都在这里
+      - ./data:/data
+    environment:
+      TJH_ENV: production
+      TJH_HOST: 0.0.0.0
+      TJH_PORT: "8787"
+      # 容器内没有 HTTPS 终止时保持 false；前面有 nginx/caddy 做 TLS 就改成 true
+      TJH_COOKIE_SECURE: "false"
+      # 关掉内置定时抓取，改由外部触发时可设为 0
+      TJH_CAMPUS_SCHEDULER: "1"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,json,sys;r=json.load(urllib.request.urlopen('http://127.0.0.1:8787/api/health',timeout=3));sys.exit(0 if r.get('ok') else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s

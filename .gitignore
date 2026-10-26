@@ -19,6 +19,14 @@ apps/server/data/
 # 本地临时与截图工具的浏览器配置
 .tmp/
 
+# 助手在本机的工作记录（含个人路径与过程笔记），不进仓库
+.workbuddy/
+
+# 备份与 nginx 试运行产物
+backups/
+deploy/nginx/generated.conf
+
 # 系统
 .DS_Store
+Thumbs.db
 *.log

@@ -4,6 +4,11 @@
 > 一句话：**把教材、通知和记忆，安静地收进一片湖里。**
 > 本地优先、单进程可跑、API Key 自配（OpenAI 兼容协议）、能力可插拔。
 
+> **文档定位**：本文是 v0.1 阶段的设计稿，保留当时的完整推演过程（含尚未实现的模块），
+> 作为「为什么这么设计」的依据。**当前实现进度以 [`docs/README.md`](README.md) 与代码为准**；
+> 已经落地的能力见 `docs/FRAMEWORK.md`、`LIBRARY.md`、`ENGLISH.md`、`WECHAT-DIGEST.md`。
+> 路径：`docs/DESIGN.md`。
+
 ---
 
 ## 0. 一页速览
@@ -11,15 +16,15 @@
 | 维度 | 结论 |
 |---|---|
 | 形态 | 本地优先的 Web 应用（浏览器打开），单进程启动；**支持多账号与局域网访问**，所有数据集中在仓库根 `data/` |
-| 前端 | React 19 + TypeScript + Vite + Tailwind v4 + Radix/shadcn 风格组件 + framer-motion |
+| 前端 | React 19 + TypeScript + Vite + Tailwind v4 + Radix/shadcn 风格组件 + zustand |
 | 后端 | Python 3.11 + FastAPI + SQLModel + SQLite（FTS5 + 向量暴力检索） |
 | 模型 | 任意 OpenAI 兼容端点（DeepSeek / OpenAI / Kimi / 通义 / 硅基流动 / Ollama…），填 baseURL + model + key |
 | 检索 | 混合检索：全文 BM25（FTS5+jieba）+ 向量余弦，RRF 融合，回答带**页码/幻灯片号引用** |
 | 爬虫 | 「校园雷达」：订阅各高校教务处通知公告页，LLM 结构化抽取竞赛/讲座/考试/截止日期 |
 | 记忆 | 「联想记忆」：读取你的喜好档案 → 生成专属记忆卡 → FSRS 间隔复习 + 主动回忆 |
 | 扩展性 | **能力（Capability）插件化**：后端一个目录 + 前端一个目录 = 新功能；CLI 一键脚手架；工具自动进入 Agent 可调用列表；可选 MCP 互通 |
-| 首版闭环 | 上传 docx → 提问 → 流式回答 + 引用定位（下一步接入） |
-| 当前进度 | **v0.2.0 已落地**：账号体系（注册/登录/会话/成员管理）、按用户的数据隔离、统一 `data/` 目录；框架（能力插件、工具注册、迁移、任务中心、模型接入、设计系统）与两个示例能力（速记、群聊简报） |
+| 首版闭环 | 上传教材 → 提问 → 流式回答 + 页码引用（已上线） |
+| 当前进度 | **v0.3.0**：账号体系、按用户数据隔离、统一 `data/`；框架（能力插件、工具注册、迁移、任务中心、模型接入）与 4 个已上线能力（速记、群聊简报、情景英语、教材库）；教材库含扫描件 OCR 与引用问答 |
 
 ---
 
@@ -199,7 +204,7 @@ flowchart LR
 | 爬虫 | httpx + lxml/selectolax + trafilatura（Playwright 仅兜底） | 8 所高校实站实测：列表页 8/8 静态、零配置启发式 15/15 命中、正文抽取 6/6 成功 → 纯 HTTP 覆盖 85%–90%（见 `docs/VERIFICATION-CRAWLER.md`） |
 | 调度 | APScheduler（进程内） | 定时抓取、到期提醒，无需 Redis/Celery |
 | 密钥 | cryptography.Fernet + 本机密钥文件 | API Key 加密落库，不写明文 |
-| 前端 | React 19 + TS + Vite + Tailwind v4 + Radix + lucide + framer-motion + zustand + react-markdown + KaTeX + recharts | 生态成熟、体积可控、能做细腻动效；公式与图表开箱即用（本机已实测：React 19.3 / Vite 8.3 / Tailwind 4.3 安装正常） |
+| 前端 | React 19 + TS + Vite + Tailwind v4 + Radix + lucide + zustand + react-router | 生态成熟、体积可控；动效用 CSS/Tailwind 手写，不额外引动画库（实际依赖以 `apps/web/package.json` 为准） |
 | 测试 | pytest + httpx.AsyncClient / vitest | 后端契约 + 前端组件 |
 | 版本策略 | 后端锁 `requirements.txt`，前端锁 `pnpm-lock.yaml` | 可复现；升级走显式 PR |
 | 打包 | `./scripts/dev.sh`（双进程）/ `./scripts/start.sh`（单进程）+ Dockerfile | 学生一条命令能跑起来 |

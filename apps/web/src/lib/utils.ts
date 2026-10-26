@@ -36,6 +36,28 @@ export function shortenPath(path: string, max = 46): string {
   return `…/${parts.slice(-2).join("/")}`;
 }
 
-export function titleCaseFallback(id: string): string {
-  return id.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+/** 能力成熟度的唯一真源：后端 manifest.status，前端只做展示映射。 */
+export type StatusTone = "jade" | "amber" | "neutral";
+
+export function capabilityStatusMeta(status?: string | null): { label: string; tone: StatusTone; hint: string } {
+  switch (status) {
+    case "beta":
+      return { label: "公测中", tone: "amber", hint: "功能可用，细节可能调整" };
+    case "planned":
+      return { label: "规划中", tone: "neutral", hint: "尚未实现，导航里不会出现" };
+    case "stable":
+    default:
+      return { label: "已上线", tone: "jade", hint: "功能完整，可放心使用" };
+  }
+}
+
+/**
+ * 服务端绝对路径对外展示时只保留末两级。
+ * 原始路径包含用户名与部署目录结构，公网环境下属于不必要的信息暴露。
+ */
+export function maskPath(path?: string | null, max = 46): string {
+  if (!path) return "—";
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  if (parts.length <= 2) return path;
+  return shortenPath(`…/${parts.slice(-2).join("/")}`, max);
 }

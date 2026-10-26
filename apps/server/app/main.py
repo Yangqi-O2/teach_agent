@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .api import auth as auth_api
 from .api import jobs as jobs_api
+from .api import profile as profile_api
 from .api import providers as providers_api
 from .api import settings as settings_api
 from .api import system as system_api
@@ -23,6 +24,7 @@ from .config import APP_NAME, VERSION, settings
 from .core.auth import current_user
 from .core.capability import capabilities
 from .core.errors import ApiError, api_error_handler, validation_error_handler
+from .core.security import OriginGuard, SecurityHeadersMiddleware
 from .core.tools import registry as tool_registry
 from .db import init_db
 
@@ -58,17 +60,30 @@ def create_app() -> FastAPI:
         title=APP_NAME,
         version=VERSION,
         lifespan=lifespan,
-        docs_url="/api/docs",
-        openapi_url="/api/openapi.json",
+        docs_url="/api/docs" if settings.expose_docs else None,
+        openapi_url="/api/openapi.json" if settings.expose_docs else None,
+        redoc_url=None,
     )
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Accept", "Authorization", "X-Requested-With"],
     )
+
+    # 注意添加顺序：后添加的在外层。安全头要包住 OriginGuard 返回的 403 响应。
+    app.add_middleware(
+        OriginGuard,
+        allowed_origins=settings.cors_origins,
+        enabled=settings.cross_origin_guard,
+    )
+    if settings.security_headers:
+        app.add_middleware(
+            SecurityHeadersMiddleware,
+            hsts_seconds=settings.hsts_seconds,
+        )
 
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -83,6 +98,7 @@ def create_app() -> FastAPI:
     # —— 需要登录的接口 ——
     protected = [Depends(current_user)]
     app.include_router(system_api.router, prefix="/api", dependencies=protected)
+    app.include_router(profile_api.router, prefix="/api", dependencies=protected)
     app.include_router(providers_api.router, prefix="/api", dependencies=protected)
     app.include_router(jobs_api.router, prefix="/api", dependencies=protected)
     app.include_router(settings_api.router, prefix="/api", dependencies=protected)
@@ -116,10 +132,12 @@ def _mount_frontend(app: FastAPI) -> None:
                 },
                 status_code=200,
             )
-        target = (dist / full_path).resolve()
-        if full_path and target.is_file() and str(target).startswith(str(dist.resolve())):
+        root = dist.resolve()
+        target = (root / full_path).resolve()
+        # 用 is_relative_to 而不是字符串前缀：后者对 /dist-evil 这类同级目录会误判
+        if full_path and target.is_relative_to(root) and target.is_file():
             return FileResponse(target)
-        return FileResponse(dist / "index.html")
+        return FileResponse(root / "index.html")
 
 
 app = create_app()

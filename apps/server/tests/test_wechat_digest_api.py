@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 from app.capabilities.wechat_digest import jobs as digest_jobs
 from app.capabilities.wechat_digest import service
 from app.capabilities.wechat_digest.models import Digest
+from app.core.tools import ToolContext
 from app.core.tools import registry as tool_registry
 from app.db import engine
 from app.models import Provider
@@ -73,6 +74,13 @@ def fake_llm(monkeypatch):
 
 
 # ---------------------------------------------------------------- 小工具
+
+
+def _uid(client) -> int:
+    """当前登录用户 id（v0.2 起工具与数据行都要带 user_id）。"""
+    resp = client.get("/api/auth/me")
+    assert resp.status_code == 200, resp.text
+    return int(resp.json()["id"])
 
 
 def _clear_providers() -> None:
@@ -299,6 +307,7 @@ def test_digest_not_found_404(client) -> None:
 def test_export_not_ready_409(client) -> None:
     with Session(engine) as session:
         digest = Digest(
+            user_id=_uid(client),
             title="未完成简报",
             status="running",
             created_at=service.now_iso(),
@@ -502,11 +511,13 @@ def test_tool_summarize_group_chat(client, monkeypatch) -> None:
     monkeypatch.setattr(digest_jobs, "LLMClient", FakeLLMClient)
     monkeypatch.setattr(digest_capability, "LLMClient", FakeLLMClient)
     _create_provider(client)
+    ctx = ToolContext(user_id=_uid(client))
 
     result = asyncio.run(
         tool_registry.execute(
             "summarize_group_chat",
             {"text": SAMPLE_TEXT, "group_name": "工具群", "style": "general"},
+            ctx=ctx,
         )
     )
     assert result["ok"] is True, result
@@ -522,7 +533,7 @@ def test_tool_summarize_group_chat(client, monkeypatch) -> None:
     assert detail["status"] == "done"
     assert detail["group_name"] == "工具群"
 
-    listed = asyncio.run(tool_registry.execute("list_group_digests", {"limit": 5}))
+    listed = asyncio.run(tool_registry.execute("list_group_digests", {"limit": 5}, ctx=ctx))
     assert listed["ok"] is True
     assert any(row["id"] == data["digest_id"] for row in listed["data"])
 
@@ -545,11 +556,13 @@ def test_tool_summarize_failure_marks_digest_error(client, monkeypatch) -> None:
         raise RuntimeError("工具内部模型调用失败")
 
     monkeypatch.setattr(digest_capability, "summarize_groups", boom)
+    ctx = ToolContext(user_id=_uid(client))
 
     result = asyncio.run(
         tool_registry.execute(
             "summarize_group_chat",
             {"text": SAMPLE_TEXT, "group_name": "工具失败群", "style": "general"},
+            ctx=ctx,
         )
     )
     assert result["ok"] is False

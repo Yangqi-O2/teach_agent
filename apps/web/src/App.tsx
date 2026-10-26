@@ -1,12 +1,24 @@
 import { useEffect } from "react";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, useLocation } from "react-router-dom";
 
 import { AppRoutes } from "./app/router";
 import { Shell } from "./app/Shell";
 import { BrandMark } from "./components/Brand";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Button } from "./components/ui/primitives";
 import { LoginPage } from "./pages/Login";
+import { OnboardingPage } from "./pages/Onboarding";
 import { applyTheme, useApp } from "./store/app";
+
+/** 路由切换时重置错误边界，否则一次异常会让整站一直停在错误页。 */
+function RouteBoundary() {
+  const location = useLocation();
+  return (
+    <ErrorBoundary key={location.pathname}>
+      <AppRoutes />
+    </ErrorBoundary>
+  );
+}
 
 function BootScreen() {
   return (
@@ -60,6 +72,7 @@ export default function App() {
   const booted = useApp((s) => s.booted);
   const bootError = useApp((s) => s.bootError);
   const user = useApp((s) => s.user);
+  const profile = useApp((s) => s.profile);
   const theme = useApp((s) => s.theme);
   const initialize = useApp((s) => s.initialize);
   const paletteOpen = useApp((s) => s.paletteOpen);
@@ -101,11 +114,14 @@ export default function App() {
   if (!booted) return <BootScreen />;
   if (bootError) return <BootError message={bootError} onRetry={() => initialize()} />;
   if (!user) return <LoginPage />;
+  // 注册第二步：资料没确认过就先进引导页，填完或明确跳过后再进主界面。
+  // profile 为 null（接口失败）时不拦截——不能因为画像接口挂了就把人挡在门外。
+  if (profile && !profile.onboarded) return <OnboardingPage />;
 
   return (
     <BrowserRouter>
       <Shell>
-        <AppRoutes />
+        <RouteBoundary />
       </Shell>
     </BrowserRouter>
   );

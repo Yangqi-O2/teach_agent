@@ -110,7 +110,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex items-center justify-between px-2 pt-2">
           <ThemeToggle />
           <span className="text-[10.5px] tracking-wider text-ink-faint/80">
-            v{info?.app.version ?? "0.2.0"}
+            {info?.app.version ? `v${info.app.version}` : ""}
           </span>
         </div>
       </div>

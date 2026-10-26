@@ -1,0 +1,58 @@
+# 天健湖 · systemd 服务（Linux）
+#
+# 安装：
+#   1. 把仓库放到 <SITE_ROOT>（例：/opt/tianjianhu），并用普通用户完成一次 setup
+#        cd <SITE_ROOT> && python3 scripts/task.py setup
+#   2. 若不用专用账号，把下面 User/Group 改成你自己的用户名
+#        sudo useradd --system --create-home --shell /usr/sbin/nologin tianjianhu
+#        sudo chown -R tianjianhu:tianjianhu <SITE_ROOT>
+#   3. 安装并启动
+#        sudo cp deploy/systemd/tianjianhu.service /etc/systemd/system/
+#        sudo sed -i "s|<SITE_ROOT>|<实际路径>|g; s|<USER>|tianjianhu|g" /etc/systemd/system/tianjianhu.service
+#        sudo systemctl daemon-reload && sudo systemctl enable --now tianjianhu
+#   4. 看状态与日志
+#        systemctl status tianjianhu
+#        journalctl -u tianjianhu -f
+#
+# 说明：服务只监听 127.0.0.1，对外由 nginx 反代（见 deploy/nginx/tianjianhu.linux.conf）。
+
+[Unit]
+Description=天健湖 Tianjianhu（教育智能体）
+Documentation=file://<SITE_ROOT>/docs/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=<USER>
+Group=<USER>
+WorkingDirectory=<SITE_ROOT>/apps/server
+
+# 生产模式：自动关闭 /api/docs；Cookie 是否 Secure 取决于是否已上 HTTPS
+Environment=TJH_ENV=production
+Environment=TJH_HOST=127.0.0.1
+Environment=TJH_PORT=8787
+Environment=TJH_LOG_LEVEL=INFO
+# 上线 HTTPS 后取消注释（三个都要设，否则 Cookie 不带 Secure、也不下发 HSTS）
+# Environment=TJH_COOKIE_SECURE=true
+# Environment=TJH_HSTS_SECONDS=31536000
+
+ExecStart=<SITE_ROOT>/apps/server/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8787
+
+Restart=always
+RestartSec=3
+# 抓取任务可能在启动时跑一会儿，给足启动时间
+TimeoutStartSec=120
+
+# —— 基础加固 ——
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+# 数据目录必须在可写区，否则迁移与上传会失败
+ReadWritePaths=<SITE_ROOT>/data
+# 校园雷达要出网抓取，所以不能整体禁网；如需禁止出网可加 PrivateNetwork=true
+# 并改为外部定时任务投递数据
+
+[Install]
+WantedBy=multi-user.target

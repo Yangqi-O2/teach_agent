@@ -6,8 +6,10 @@ import {
   type AppInfo,
   type AuthConfig,
   type CapabilityInfo,
+  type ProfileInput,
   type Provider,
   type User,
+  type UserProfile,
 } from "../lib/api";
 
 export type Theme = "light" | "dark" | "system";
@@ -36,6 +38,7 @@ type AppState = {
   bootError: string | null;
   authConfig: AuthConfig | null;
   user: User | null;
+  profile: UserProfile | null;
   info: AppInfo | null;
   capabilities: CapabilityInfo[];
   providers: Provider[];
@@ -46,6 +49,8 @@ type AppState = {
   initialize: () => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName: string) => Promise<void>;
+  loadProfile: () => Promise<UserProfile | null>;
+  saveProfile: (input: ProfileInput) => Promise<UserProfile>;
   logout: () => Promise<void>;
   loadWorkspace: () => Promise<void>;
   resetAuth: () => void;
@@ -62,6 +67,7 @@ let toastSeq = 0;
 
 const EMPTY_WORKSPACE = {
   info: null as AppInfo | null,
+  profile: null as UserProfile | null,
   capabilities: [] as CapabilityInfo[],
   providers: [] as Provider[],
 };
@@ -71,6 +77,7 @@ export const useApp = create<AppState>((set, get) => ({
   bootError: null,
   authConfig: null,
   user: null,
+  profile: null,
   info: null,
   capabilities: [],
   providers: [],
@@ -129,12 +136,30 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   loadWorkspace: async () => {
-    const [info, capabilities, providers] = await Promise.all([
+    const [info, capabilities, providers, profile] = await Promise.all([
       api.info(),
       api.capabilities.list(),
       api.providers.list(),
+      // 画像失败不影响整个工作台加载：个性化推荐可以退化，登录不能
+      api.profile.get().catch(() => null),
     ]);
-    set({ info, capabilities, providers });
+    set({ info, capabilities, providers, profile });
+  },
+
+  loadProfile: async () => {
+    try {
+      const profile = await api.profile.get();
+      set({ profile });
+      return profile;
+    } catch {
+      return null;
+    }
+  },
+
+  saveProfile: async (input) => {
+    const profile = await api.profile.update(input);
+    set({ profile });
+    return profile;
   },
 
   refreshProviders: async () => {

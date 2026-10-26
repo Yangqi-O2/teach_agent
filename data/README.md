@@ -6,12 +6,12 @@
 
 ```
 data/
-├── app.db            SQLite 主库（用户、供应商、速记、简报、任务、事件；WAL 模式）
+├── app.db            SQLite 主库（用户、供应商、速记、简报、任务、事件、教材与索引；WAL 模式）
 ├── app.db-wal        SQLite WAL 日志（运行时自动生成）
 ├── app.db-shm        共享内存文件（运行时自动生成）
 ├── secret.key        API Key 加密用的本机密钥（0600 权限，丢了就解不开已存的 Key）
-├── uploads/          后续教材库上传的原始文件（Word / PPT / PDF / EPUB）
-└── cache/            解析结果、模型响应等缓存
+├── uploads/          教材库上传的原始文件（PDF / EPUB / DOCX / PPTX / TXT）
+└── cache/            OCR 工具二进制、解析结果、模型响应等缓存
 ```
 
 ## 约定
@@ -20,3 +20,4 @@ data/
 - **多人协作**：每个人在本地跑自己的实例、有自己的 `data/`，代码通过 GitHub 共享；**永远不要把 `data/`、`.env` 提交上去**。
 - **重置环境**：停掉服务后直接删除 `data/`，下次启动会自动重建（所有账号与数据都会清空）。
 - **服务器部署**：想放到别处可以用环境变量 `TJH_DATA_DIR=/srv/tianjianhu-data` 指定。
+- **权限**：这个目录包含会话密钥与加密密钥，部署时建议 `chmod 700 data`，且不要放在任何静态文件目录下。
